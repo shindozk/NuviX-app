@@ -20,6 +20,7 @@ export type Settings = {
   touchControls: boolean;
   showPerformanceStats: boolean;
   enableHaptics: boolean;
+  uiSounds: boolean;
   language: 'auto' | LanguageCode;
 };
 
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   touchControls: false,
   showPerformanceStats: false,
   enableHaptics: true,
+  uiSounds: true,
   language: 'auto',
 };
 

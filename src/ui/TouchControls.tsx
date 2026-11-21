@@ -1,15 +1,29 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+  Animated,
+  Dimensions,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
   View,
-  Animated,
-  Dimensions,
-  PanResponder,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import {
+  faBars,
+  faChevronDown,
+  faChevronLeft,
+  faChevronRight,
+  faChevronUp,
+  faClone,
+} from '@fortawesome/free-solid-svg-icons';
+import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
-import { colors } from '../theme';
+import { colors, radius } from '../theme';
+import FaIcon from './Icon';
+import { playUiSound } from './sound';
 
 export type StickAxis = 'left' | 'right' | 'up' | 'down';
 
@@ -17,15 +31,8 @@ type Props = {
   run: (script: string) => void;
 };
 
-type ButtonConfig = {
-  label: string;
-  index: number;
-  x: number;
-  y: number;
-};
-
-// Button indices for the virtual gamepad
-const BUTTON_INDICES: Record<string, number> = {
+// Button indices for the virtual gamepad bridge (window.__xcpPad).
+const BUTTON_INDICES = {
   A: 0,
   B: 1,
   X: 2,
@@ -36,341 +43,256 @@ const BUTTON_INDICES: Record<string, number> = {
   RT: 7,
   VIEW: 8,
   MENU: 9,
-};
+  UP: 13,
+  DOWN: 14,
+  LEFT: 11,
+  RIGHT: 12,
+} as const;
 
-// Minimalist gamepad layout
-const BUTTONS: ButtonConfig[] = [
-  { label: 'A', index: BUTTON_INDICES.A, x: 0.51, y: 0.63 },
-  { label: 'B', index: BUTTON_INDICES.B, x: 0.45, y: 0.51 },
-  { label: 'X', index: BUTTON_INDICES.X, x: 0.31, y: 0.54 },
-  { label: 'Y', index: BUTTON_INDICES.Y, x: 0.25, y: 0.42 },
-  { label: 'LB', index: BUTTON_INDICES.LB, x: 0.08, y: 0.5 },
-  { label: 'RB', index: BUTTON_INDICES.RB, x: 0.84, y: 0.5 },
-  { label: 'LT', index: BUTTON_INDICES.LT, x: 0.12, y: 0.38 },
-  { label: 'RT', index: BUTTON_INDICES.RT, x: 0.79, y: 0.37 },
-  { label: '⧉', index: BUTTON_INDICES.VIEW, x: 0.92, y: 0.48 },
-  { label: '☰', index: BUTTON_INDICES.MENU, x: 0.05, y: 0.48 },
-];
+const STICK_RADIUS = 62;
+const KNOB_RADIUS = 30;
 
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
+
+function feedback() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+}
 
 /**
- * Modern minimalist button with subtle styling.
+ * Gamepad button: round translucent Material-style chip with a soft press
+ * animation. Sends press/release to the injected bridge.
  */
-function MinimalButton({ label, index, x, y, run }: { label: string; index: number; x: number; y: number; run: (s: string) => void }) {
-  const pressAnim = useRef(new Animated.Value(1)).current;
+function PadButton({
+  label,
+  icon,
+  index,
+  size = 54,
+  style,
+  run,
+}: {
+  label: string;
+  icon?: IconProp;
+  index: number;
+  size?: number;
+  style?: StyleProp<ViewStyle>;
+  run: (script: string) => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
   const [pressed, setPressed] = useState(false);
 
-  const handlePressIn = () => {
+  const pressIn = useCallback(() => {
     setPressed(true);
-    Animated.spring(pressAnim, {
-      toValue: 0.92,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(scale, { toValue: 0.88, speed: 40, useNativeDriver: true }).start();
+    playUiSound('tap', 0.18);
+    feedback();
     run(`window.__xcpPad.setButton(${index}, true, 1)`);
-  };
+  }, [index, run, scale]);
 
-  const handlePressOut = () => {
+  const pressOut = useCallback(() => {
     setPressed(false);
-    Animated.spring(pressAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(scale, { toValue: 1, speed: 30, useNativeDriver: true }).start();
     run(`window.__xcpPad.setButton(${index}, false, 0)`);
-  };
-
-  const position = {
-    left: x * width - 30,
-    top: y * height - 30,
-  };
+  }, [index, run, scale]);
 
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={({ pressed: nativePressed }) => [
-        styles.buttonContainer,
-        { ...position },
-        pressed && styles.buttonPressed,
-        nativePressed && styles.buttonPress,
-      ]}
-      hitSlop={16}
-    >
+    <Pressable onPressIn={pressIn} onPressOut={pressOut} hitSlop={10}>
       <Animated.View
-        style={{
-          transform: [{ scale: pressAnim }],
-          opacity: pressed ? 0.9 : 0.8,
-        }}
+        style={[
+          styles.padButton,
+          { width: size, height: size, borderRadius: size / 2, transform: [{ scale }] },
+          pressed && styles.padButtonPressed,
+          style,
+        ]}
       >
-        <Text style={styles.buttonLabel}>{label}</Text>
+        {icon ? (
+          <FaIcon icon={icon} size={Math.round(size / 3.4)} color={colors.textPrimary} />
+        ) : (
+          <Text style={[styles.padButtonLabel, { fontSize: Math.round(size / 3) }]}>{label}</Text>
+        )}
       </Animated.View>
     </Pressable>
   );
 }
 
-type AnalogStickProps = {
+/** Directional D-pad button with a Font Awesome chevron. */
+function DpadButton({
+  direction,
+  icon,
+  x,
+  y,
+  run,
+}: {
+  direction: 'up' | 'down' | 'left' | 'right';
+  icon: IconProp;
   x: number;
   y: number;
   run: (script: string) => void;
-  axisIndex: number;
-};
-
-function AnalogStick({ x, y, run, axisIndex }: AnalogStickProps) {
-  const pressAnim = useRef(new Animated.Value(1)).current;
+}) {
+  const index = BUTTON_INDICES[direction.toUpperCase() as keyof typeof BUTTON_INDICES];
+  const scale = useRef(new Animated.Value(1)).current;
   const [active, setActive] = useState(false);
-  const stickAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const panResponder = useRef(
+
+  const pressIn = useCallback(() => {
+    setActive(true);
+    Animated.spring(scale, { toValue: 0.9, speed: 40, useNativeDriver: true }).start();
+    playUiSound('tap', 0.18);
+    feedback();
+    run(`window.__xcpPad.setButton(${index}, true, 1)`);
+  }, [index, run, scale]);
+
+  const pressOut = useCallback(() => {
+    setActive(false);
+    Animated.spring(scale, { toValue: 1, speed: 30, useNativeDriver: true }).start();
+    run(`window.__xcpPad.setButton(${index}, false, 0)`);
+  }, [index, run, scale]);
+
+  return (
+    <Pressable
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      hitSlop={8}
+      style={[styles.dpadButton, { left: x, top: y }]}
+    >
+      <Animated.View
+        style={[
+          styles.dpadButtonInner,
+          active && styles.dpadButtonActive,
+          { transform: [{ scale }] },
+        ]}
+      >
+        <FaIcon
+          icon={icon}
+          size={16}
+          color={active ? colors.onPrimary : colors.textSecondary}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * Analog stick built with native responder gestures: the knob follows the
+ * finger inside the base and reports normalized axis values to the bridge.
+ */
+function AnalogStick({
+  side,
+  run,
+}: {
+  side: 'left' | 'right';
+  run: (script: string) => void;
+}) {
+  const axisIndex = side === 'left' ? 0 : 1;
+  const knob = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const [active, setActive] = useState(false);
+  const granted = useRef(false);
+  const activeRef = useRef(false);
+
+  const release = useCallback(() => {
+    granted.current = false;
+    activeRef.current = false;
+    setActive(false);
+    run(`window.__xcpPad.setAxis(${axisIndex}, 0, 0)`);
+    Animated.spring(knob, {
+      toValue: { x: 0, y: 0 },
+      speed: 40,
+      useNativeDriver: true,
+    }).start();
+  }, [axisIndex, knob, run]);
+
+  const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) + Math.abs(gesture.dy) > 2,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        granted.current = true;
+        activeRef.current = true;
         setActive(true);
-        run(`window.__xcpPad.setAxis(${axisIndex}, 0, 0)`);
+        feedback();
       },
-      onPanResponderMove: (_, gesture) => {
-        const maxDistance = 30;
-        const distance = Math.sqrt(gesture.dx ** 2 + gesture.dy ** 2);
-        const clampedDistance = Math.min(distance, maxDistance);
-        const angle = Math.atan2(gesture.dy, gesture.dx);
-        const scale = Math.min(distance / maxDistance, 1);
-
-        const valueX = Math.sin(angle) * scale;
-        const valueY = Math.cos(angle) * scale;
-
-        run(`window.__xcpPad.setAxis(${axisIndex}, ${-valueY}, ${valueX})`);
-        stickAnim.setValue({ x: gesture.dx, y: gesture.dy });
+      onPanResponderMove: (_event, gesture) => {
+        if (!granted.current) return;
+        const distance = Math.hypot(gesture.dx, gesture.dy);
+        const max = STICK_RADIUS - KNOB_RADIUS;
+        const factor = distance > max ? max / distance : 1;
+        const x = gesture.dx * factor;
+        const y = gesture.dy * factor;
+        knob.setValue({ x, y });
+        const nx = (x / max).toFixed(3);
+        const ny = (y / max).toFixed(3);
+        run(`window.__xcpPad.setAxis(${axisIndex}, ${-Number(ny)}, ${Number(nx)})`);
       },
-      onPanResponderRelease: () => {
-        setActive(false);
-        run(`window.__xcpPad.setAxis(${axisIndex}, 0, 0)`);
-        stickAnim.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderTerminate: () => {
-        setActive(false);
-        run(`window.__xcpPad.setAxis(${axisIndex}, 0, 0)`);
-        stickAnim.setValue({ x: 0, y: 0 });
-      },
+      onPanResponderRelease: release,
+      onPanResponderTerminate: release,
     })
   ).current;
 
-  const position = {
-    left: x * width - 25,
-    top: y * height - 25,
-  };
-
-  const stickScale = stickAnim.y.interpolate({
-    inputRange: [-50, 50],
-    outputRange: [0.85, 1.15],
-    extrapolate: 'clamp',
-  });
-
   return (
-    <View style={styles.stickContainer}>
-      <Pressable
-        style={styles.stickBase}
-        {...panResponder.panHandlers}
-      >
-        <Animated.View
-          style={[
-            styles.stickKnob,
-            {
-              transform: [
-                { translateX: stickAnim.x },
-                { translateY: stickAnim.y },
-                { scale: stickScale },
-              ],
-            },
-          ]}
-        />
-      </Pressable>
+    <View
+      style={[
+        styles.stickBase,
+        side === 'left' ? { left: 28, bottom: 28 } : { right: 28, bottom: 28 },
+        active && styles.stickBaseActive,
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.stickKnob,
+          active && styles.stickKnobActive,
+          { transform: [{ translateX: knob.x }, { translateY: knob.y }] },
+        ]}
+        {...pan.panHandlers}
+      />
     </View>
   );
 }
 
 /**
- * On-screen gamepad with minimalist visual design.
- * All inputs are forwarded to the virtual gamepad injected via the bridge.
+ * On-screen gamepad with a clean anchored layout:
+ * left stick + D-pad on the left, face buttons + right stick on the right,
+ * shoulders/triggers on the top corners and system buttons top-center.
  */
 export default function TouchControls({ run }: Props) {
-  const [dPadActive, setDPadActive] = useState(false);
-  const [faceActive, setFaceActive] = useState(false);
-
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* D-Pad - left side */}
-      <View style={styles.dpadContainer}>
-        <Dpad run={run} active={dPadActive} setActive={setDPadActive} />
+      {/* Shoulders + triggers */}
+      <View style={[styles.shoulderCluster, { left: 18 }]}>
+        <PadButton label="LB" index={BUTTON_INDICES.LB} size={46} run={run} />
+        <PadButton label="LT" index={BUTTON_INDICES.LT} size={46} run={run} />
+      </View>
+      <View style={[styles.shoulderCluster, { right: 18 }]}>
+        <PadButton label="RB" index={BUTTON_INDICES.RB} size={46} run={run} />
+        <PadButton label="RT" index={BUTTON_INDICES.RT} size={46} run={run} />
       </View>
 
-      {/* Face buttons - right bottom */}
-      <View style={styles.faceContainer}>
-        {BUTTONS.slice(0, 4).map((button) => (
-          <MinimalButton
-            key={button.label}
-            label={button.label}
-            index={button.index}
-            x={button.x}
-            y={button.y}
-            run={run}
-          />
-        ))}
+      {/* System buttons, top center */}
+      <View style={styles.systemCluster}>
+        <PadButton label="View" icon={faClone} index={BUTTON_INDICES.VIEW} size={40} run={run} />
+        <PadButton label="Menu" icon={faBars} index={BUTTON_INDICES.MENU} size={40} run={run} />
       </View>
 
-      {/* Shoulder buttons - top */}
-      <View style={styles.shoulderContainer}>
-        {BUTTONS.slice(4, 8).map((button) => (
-          <MinimalButton
-            key={button.label}
-            label={button.label}
-            index={button.index}
-            x={button.x}
-            y={button.y}
-            run={run}
-          />
-        ))}
+      {/* Left stick + D-pad */}
+      <AnalogStick side="left" run={run} />
+      <View style={[styles.dpadCluster, { left: 28 + STICK_RADIUS * 2 + 26 }]}>
+        <DpadButton direction="up" icon={faChevronUp} x={44} y={0} run={run} />
+        <DpadButton direction="left" icon={faChevronLeft} x={0} y={44} run={run} />
+        <DpadButton direction="right" icon={faChevronRight} x={88} y={44} run={run} />
+        <DpadButton direction="down" icon={faChevronDown} x={44} y={88} run={run} />
       </View>
 
-      {/* Analog sticks */}
-      <View style={styles.sticksContainer}>
-        <AnalogStick x={0.15} y={0.85} run={run} axisIndex={0} />
-        <AnalogStick x={0.85} y={0.85} run={run} axisIndex={1} />
-      </View>
-
-      {/* View and Menu buttons */}
-      <View style={styles.systemContainer}>
-        {BUTTONS.slice(8).map((button) => (
-          <MinimalButton
-            key={button.label}
-            label={button.label}
-            index={button.index}
-            x={button.x}
-            y={button.y}
-            run={run}
-          />
-        ))}
-      </View>
-
-      {/* Status indicator */}
-      <View style={styles.statusOverlay}>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusIcon}>🎮</Text>
+      {/* Face buttons (Xbox diamond) + right stick */}
+      <View style={[styles.faceCluster, { right: 28 + STICK_RADIUS * 2 + 26 }]}>
+        <View style={styles.faceRow}>
+          <PadButton label="Y" index={BUTTON_INDICES.Y} run={run} />
+        </View>
+        <View style={styles.faceRow}>
+          <PadButton label="X" index={BUTTON_INDICES.X} run={run} />
+          <PadButton label="B" index={BUTTON_INDICES.B} run={run} />
+        </View>
+        <View style={styles.faceRow}>
+          <PadButton label="A" index={BUTTON_INDICES.A} run={run} />
         </View>
       </View>
-    </View>
-  );
-}
-
-type DpadButtonProps = {
-  direction: 'up' | 'down' | 'left' | 'right';
-  x: number;
-  y: number;
-  run: (script: string) => void;
-  onPress: () => void;
-  onRelease: () => void;
-  active: boolean;
-};
-
-function DpadButton({ direction, x, y, run, onPress, onRelease, active }: DpadButtonProps) {
-  const pressAnim = useRef(new Animated.Value(1)).current;
-  const buttonIndex = direction === 'up' ? 13 : direction === 'down' ? 14 : direction === 'left' ? 11 : 12;
-
-  const handlePressIn = () => {
-    pressAnim.setValue(0.95);
-    run(`window.__xcpPad.setButton(${buttonIndex}, true, 1)`);
-    onPress();
-  };
-
-  const handlePressOut = () => {
-    pressAnim.setValue(1);
-    run(`window.__xcpPad.setButton(${buttonIndex}, false, 0)`);
-    onRelease();
-  };
-
-  const position = {
-    left: x * width - 18,
-    top: y * height - 18,
-  };
-
-  return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={[styles.dpadButton, position, active && styles.dpadButtonActive]}
-    >
-      <Animated.Text style={[styles.dpadButtonLabel, { transform: [{ scale: pressAnim }] }]}>
-        {direction === 'up' ? '↑' : direction === 'down' ? '↓' : direction === 'left' ? '←' : '→'}
-      </Animated.Text>
-    </Pressable>
-  );
-}
-
-type DpadProps = {
-  run: (script: string) => void;
-  active: boolean;
-  setActive: (active: boolean) => void;
-};
-
-function Dpad({ run, active, setActive }: DpadProps) {
-  const centerX = 0.25;
-  const centerY = 0.63;
-  const buttonSize = 40;
-  const spacing = 12;
-
-  const [activeDir, setActiveDir] = useState<'up' | 'down' | 'left' | 'right' | null>(null);
-
-  const handlePressIn = (dir: 'up' | 'down' | 'left' | 'right') => {
-    setActiveDir(dir);
-    setActive(true);
-  };
-
-  const handlePressOut = () => {
-    setActiveDir(null);
-    setActive(false);
-  };
-
-  const dpadStyle = {
-    left: centerX * width - buttonSize / 2,
-    top: centerY * height - buttonSize * 1.5,
-  };
-
-  return (
-    <View style={[styles.dpadBase, dpadStyle]}>
-      <DpadButton
-        direction="up"
-        x={centerX}
-        y={centerY - 0.35}
-        run={run}
-        onPress={() => handlePressIn('up')}
-        onRelease={handlePressOut}
-        active={activeDir === 'up'}
-      />
-      <DpadButton
-        direction="left"
-        x={centerX - 0.3}
-        y={centerY}
-        run={run}
-        onPress={() => handlePressIn('left')}
-        onRelease={handlePressOut}
-        active={activeDir === 'left'}
-      />
-      <DpadButton
-        direction="right"
-        x={centerX + 0.3}
-        y={centerY}
-        run={run}
-        onPress={() => handlePressIn('right')}
-        onRelease={handlePressOut}
-        active={activeDir === 'right'}
-      />
-      <DpadButton
-        direction="down"
-        x={centerX}
-        y={centerY + 0.35}
-        run={run}
-        onPress={() => handlePressIn('down')}
-        onRelease={handlePressOut}
-        active={activeDir === 'down'}
-      />
+      <AnalogStick side="right" run={run} />
     </View>
   );
 }
@@ -378,138 +300,102 @@ function Dpad({ run, active, setActive }: DpadProps) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    top: 0,
-    zIndex: 999,
+    zIndex: 90,
+    elevation: 90,
   },
-  dpadContainer: {
+  shoulderCluster: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: 16,
+    top: 18,
+    flexDirection: 'row',
+    gap: 10,
   },
-  dpadBase: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
+  systemCluster: {
+    position: 'absolute',
+    top: 18,
+    left: SCREEN_W / 2 - 50,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  padButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
-    position: 'relative',
+    justifyContent: 'center',
+  },
+  padButtonPressed: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accent,
+  },
+  padButtonLabel: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  dpadCluster: {
+    position: 'absolute',
+    bottom: 72,
+    width: 132,
+    height: 132,
   },
   dpadButton: {
     position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 44,
+    height: 44,
+  },
+  dpadButtonInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dpadButtonActive: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
-  dpadButtonLabel: {
-    color: colors.accentBright,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  buttonContainer: {
+  faceCluster: {
     position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  buttonPress: {
-    opacity: 0.85,
-  },
-  buttonLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  faceContainer: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 80,
-    height: 80,
-    justifyContent: 'center',
+    bottom: 40,
+    width: 172,
     alignItems: 'center',
   },
-  shoulderContainer: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
+  faceRow: {
     flexDirection: 'row',
     gap: 10,
-  },
-  sticksContainer: {
-    position: 'absolute',
-    left: 16,
-    bottom: 100,
-    flexDirection: 'row',
-    gap: 30,
-  },
-  stickContainer: {
-    width: 60,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginVertical: 3,
   },
   stickBase: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    position: 'absolute',
+    width: STICK_RADIUS * 2,
+    height: STICK_RADIUS * 2,
+    borderRadius: STICK_RADIUS,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stickBaseActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(29, 184, 101, 0.10)',
   },
   stickKnob: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 200, 100, 0.4)',
-    shadowColor: 'rgba(0, 200, 100, 0.5)',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    width: KNOB_RADIUS * 2,
+    height: KNOB_RADIUS * 2,
+    borderRadius: KNOB_RADIUS,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
-  systemContainer: {
-    position: 'absolute',
-    left: 16,
-    top: 16,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statusOverlay: {
-    position: 'absolute',
-    left: 16,
-    top: 16,
-  },
-  statusBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  statusIcon: {
-    fontSize: 14,
+  stickKnobActive: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accent,
   },
 });

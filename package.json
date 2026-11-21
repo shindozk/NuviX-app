@@ -19,8 +19,12 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
+    "@fortawesome/fontawesome-svg-core": "^7.3.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "@fortawesome/react-native-fontawesome": "^1.0.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.26",
+    "expo-audio": "^58.0.12",
     "expo-haptics": "~58.0.8",
     "expo-keep-awake": "~58.0.4",
     "expo-localization": "~58.0.5",
@@ -34,6 +38,7 @@
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.11.1",
+    "react-native-svg": "^15.16.1",
     "react-native-web": "^0.21.4",
     "react-native-webview": "14.0.1"
   },

@@ -12,6 +12,7 @@ import FloatingMenu from './src/ui/FloatingMenu';
 import SettingsPanel from './src/ui/SettingsPanel';
 import TouchControls from './src/ui/TouchControls';
 import GameWebView, { type GameWebViewHandle } from './src/web/GameWebView';
+import { setSoundsEnabled } from './src/ui/sound';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -32,6 +33,11 @@ function Root() {
   React.useEffect(() => {
     SplashScreen.hideAsync().catch(() => undefined);
   }, []);
+
+  // Interface sounds follow the user setting.
+  React.useEffect(() => {
+    setSoundsEnabled(settings.uiSounds);
+  }, [settings.uiSounds]);
 
   // Keep the screen on while a stream is running.
   React.useEffect(() => {

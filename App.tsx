@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar, Platform, StyleSheet, View, BackHandler } from 'react-native';
+import { StatusBar, Platform, StyleSheet, View, BackHandler, Dimensions } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, MD3DarkTheme } from 'react-native-paper';
 import React from 'react';
@@ -65,9 +65,36 @@ function Root() {
   const webRef = React.useRef<GameWebViewHandle>(null);
 
   // The app always runs in landscape, including the boot animation.
+  // A watcher re-locks landscape whenever the device/app flips to portrait.
   React.useEffect(() => {
     if (Platform.OS === 'web') return;
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => undefined);
+    const lockLandscape = () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(
+        () => undefined
+      );
+    };
+    lockLandscape();
+
+    // Detect portrait orientation changes and force landscape again.
+    const subscription = ScreenOrientation.addOrientationChangeListener((event) => {
+      const orientation = event.orientationInfo.orientation;
+      if (
+        orientation === ScreenOrientation.Orientation.PORTRAIT_UP ||
+        orientation === ScreenOrientation.Orientation.PORTRAIT_DOWN
+      ) {
+        lockLandscape();
+      }
+    });
+
+    // Fallback: dimensions-based portrait detection.
+    const dimsSub = Dimensions.addEventListener('change', ({ window }: { window: { width: number; height: number } }) => {
+      if (window.width < window.height) lockLandscape();
+    });
+
+    return () => {
+      ScreenOrientation.removeOrientationChangeListener(subscription);
+      dimsSub?.remove?.();
+    };
   }, []);
 
   React.useEffect(() => {

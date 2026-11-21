@@ -13,7 +13,6 @@ import { BlurView } from 'expo-blur';
 import {
   Button as PaperButton,
   Chip as PaperChip,
-  IconButton,
   Switch as PaperSwitch,
   TextInput as PaperTextInput,
 } from 'react-native-paper';
@@ -59,7 +58,7 @@ export default function SettingsPanel({
   onReset,
 }: Props) {
   const [rendered, setRendered] = useState(visible);
-  const translateY = useRef(new Animated.Value(400)).current;
+  const translateX = useRef(new Animated.Value(420)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
@@ -67,14 +66,14 @@ export default function SettingsPanel({
     if (visible) {
       setRendered(true);
       Animated.parallel([
-        Animated.spring(translateY, {
+        Animated.spring(translateX, {
           toValue: 0,
           friction: 8,
           tension: 70,
           useNativeDriver: true,
         }),
         Animated.timing(backdrop, {
-          toValue: 1,
+          toValue: 0.45,
           duration: 260,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
@@ -95,8 +94,8 @@ export default function SettingsPanel({
           duration: 160,
           useNativeDriver: true,
         }),
-        Animated.timing(translateY, {
-          toValue: 400,
+        Animated.timing(translateX, {
+          toValue: 420,
           duration: 220,
           easing: Easing.in(Easing.quad),
           useNativeDriver: true,
@@ -126,21 +125,23 @@ export default function SettingsPanel({
           />
         </Animated.View>
 
-        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateX }] }]}>
           <BlurView intensity={70} tint="dark" style={styles.sheetBlur}>
             <View style={styles.sheetInner}>
               <View style={styles.handle} />
               <View style={styles.header}>
                 <Text style={styles.title}>{strings.settingsTitle}</Text>
-                <IconButton
-                  icon={() => <FaIcon icon={faXmark} size={16} color={colors.textPrimary} />}
-                  size={20}
+                <Pressable
                   onPress={() => {
                     playUiSound('close', 0.4);
                     onClose();
                   }}
                   style={styles.closeButton}
-                />
+                  hitSlop={8}
+                  accessibilityLabel={strings.close}
+                >
+                  <FaIcon icon={faXmark} size={18} color={colors.textPrimary} />
+                </Pressable>
               </View>
 
               <Animated.View style={{ opacity: contentOpacity, flex: 1 }}>
@@ -354,6 +355,7 @@ function ToggleRow({ label, icon, value, onValueChange }: ToggleRowProps) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    flexDirection: 'row',
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
   },
@@ -361,19 +363,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   sheet: {
-    maxHeight: '90%',
+    width: '86%',
+    maxWidth: 360,
+    height: '100%',
     borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    borderBottomLeftRadius: radius.xxl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderBottomWidth: 0,
+    borderRightWidth: 0,
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   sheetBlur: {
     flex: 1,
+    backgroundColor: 'rgba(15, 20, 16, 0.75)',
   },
   sheetInner: {
-    backgroundColor: 'rgba(15, 20, 16, 0.55)',
+    backgroundColor: 'rgba(15, 20, 16, 0.62)',
     flex: 1,
     paddingBottom: 20,
   },
@@ -399,7 +404,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   closeButton: {
-    margin: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   content: {
     padding: 20,

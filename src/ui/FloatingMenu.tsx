@@ -18,6 +18,7 @@ import {
   faHouse,
   faPowerOff,
   faRotateRight,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
@@ -44,7 +45,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const BUTTON_SIZE = 56;
 const EDGE = 10;
-const DOCK_OPACITY = 0.5;
+const DOCK_OPACITY = 0.7;
 const ACTIVE_OPACITY = 1;
 const INACTIVITY_MS = 3000;
 const TAP_SLOP = 6;
@@ -282,7 +283,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
                 accessibilityLabel={strings.close}
                 hitSlop={8}
               >
-                <FaIcon icon="xmark" size={16} color={colors.textSecondary} />
+                <FaIcon icon={faXmark} size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
             <View style={styles.sheetItems}>
@@ -399,8 +400,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 100,
-    elevation: 100,
+    zIndex: 999,
+    elevation: 999,
   },
   backdrop: {
     backgroundColor: '#000000',
@@ -518,6 +519,8 @@ const styles = StyleSheet.create({
     left: 0,
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
+    zIndex: 999,
+    elevation: 999,
   },
   buttonInner: {
     width: BUTTON_SIZE,

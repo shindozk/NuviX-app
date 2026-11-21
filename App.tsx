@@ -48,7 +48,7 @@ const nuvixTheme = {
 
 import BootAnimation from './src/boot/BootAnimation';
 import { useSettings } from './src/settings';
-import FloatingMenu from './src/ui/FloatingMenu';
+import FloatingMenu, { type FloatingMenuHandle } from './src/ui/FloatingMenu';
 import SettingsPanel from './src/ui/SettingsPanel';
 import TouchControls from './src/ui/TouchControls';
 import GameWebView, { type GameWebViewHandle } from './src/web/GameWebView';
@@ -63,6 +63,7 @@ function Root() {
   const [booting, setBooting] = React.useState(true);
   const [settingsVisible, setSettingsVisible] = React.useState(false);
   const webRef = React.useRef<GameWebViewHandle>(null);
+  const menuRef = React.useRef<FloatingMenuHandle>(null);
 
   // The app always runs in landscape, including the boot animation.
   // A watcher re-locks landscape whenever the device/app flips to portrait.
@@ -148,6 +149,10 @@ function Root() {
         setSettingsVisible(false);
         return true;
       }
+      if (menuRef.current?.isOpen()) {
+        menuRef.current.close();
+        return true;
+      }
       if (settings.touchControls) {
         update({ touchControls: false });
         return true;
@@ -218,7 +223,7 @@ function Root() {
         <View style={styles.stage}>
           <GameWebView ref={webRef} settings={settings} onMessage={handleMessage} />
           {settings.touchControls && <TouchControls run={runTouchScript} />}
-          <FloatingMenu onAction={handleAction} touchControlsOn={settings.touchControls} />
+          <FloatingMenu ref={menuRef} onAction={handleAction} touchControlsOn={settings.touchControls} />
           <SettingsPanel
             visible={settingsVisible}
             settings={settings}

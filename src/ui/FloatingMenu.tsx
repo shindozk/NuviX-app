@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -18,7 +18,6 @@ import {
   faHouse,
   faPowerOff,
   faRotateRight,
-  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
@@ -26,6 +25,7 @@ import { colors, radius } from '../theme';
 import { strings } from '../i18n';
 import FaIcon from './Icon';
 import { playUiSound } from './sound';
+import SidePanel from './SidePanel';
 
 export type MenuAction = 'home' | 'reload' | 'touch' | 'settings' | 'exit';
 
@@ -33,6 +33,7 @@ type MenuItem = {
   action: MenuAction;
   icon: IconProp;
   labelKey: keyof typeof strings;
+  danger?: boolean;
 };
 
 const MENU_ITEMS: MenuItem[] = [
@@ -40,10 +41,10 @@ const MENU_ITEMS: MenuItem[] = [
   { action: 'reload', icon: faRotateRight, labelKey: 'reload' },
   { action: 'touch', icon: faGamepad, labelKey: 'touchControls' },
   { action: 'settings', icon: faGear, labelKey: 'settings' },
-  { action: 'exit', icon: faPowerOff, labelKey: 'exit' },
+  { action: 'exit', icon: faPowerOff, labelKey: 'exit', danger: true },
 ];
 
-const BUTTON_SIZE = 56;
+const BUTTON_SIZE = 52;
 const EDGE = 10;
 const DOCK_OPACITY = 0.7;
 const ACTIVE_OPACITY = 1;
@@ -60,9 +61,10 @@ const screen = Dimensions.get('window');
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
+export type FloatingMenuHandle = { close: () => void; isOpen: () => boolean };
+
+const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu({ onAction, touchControlsOn }: Props, ref) {
   const [open, setOpen] = useState(false);
-  const [sheetHeight, setSheetHeight] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
   const position = useRef(
     new Animated.ValueXY({
@@ -158,10 +160,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
         wake();
       },
       onPanResponderMove: (_event, gesture) => {
-        if (
-          !moved.current &&
-          Math.hypot(gesture.dx, gesture.dy) > TAP_SLOP
-        ) {
+        if (!moved.current && Math.hypot(gesture.dx, gesture.dy) > TAP_SLOP) {
           moved.current = true;
           Animated.spring(scale, {
             toValue: 1.15,
@@ -216,93 +215,68 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
     })
   ).current;
 
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: open ? 1 : 0,
-      duration: open ? 320 : 220,
-      easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, [open, progress]);
-
-  const sheetTranslate = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-(sheetHeight || 420), 0],
-  });
-  const backdropOpacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.55],
-  });
-
   const handleAction = (action: MenuAction) => {
+    if (action === 'touch') {
+      // Toggle touch controls without closing the menu
+      playUiSound('toggle', 0.4);
+      onAction(action);
+      return;
+    }
     playUiSound('tap', 0.4);
     setOpen(false);
     scheduleDock(400);
     setTimeout(() => onAction(action), 180);
   };
 
+  useImperativeHandle(ref, () => ({
+    close: () => { setOpen(false); scheduleDock(400); },
+    isOpen: () => open,
+  }));
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {open ? (
-        <Animated.View
-          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdropOpacity }]}
-        >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => {
-              playUiSound('close', 0.4);
-              setOpen(false);
-              scheduleDock(400);
-            }}
-            accessibilityLabel={strings.close}
-          />
-        </Animated.View>
-      ) : null}
-
-      {/* Liquid glass options sheet dropping from the top. */}
-      <Animated.View
-        style={[styles.sheet, { transform: [{ translateY: sheetTranslate }] }]}
-        pointerEvents={open ? 'auto' : 'none'}
-        onLayout={(event) => {
-          const { height } = event.nativeEvent.layout;
-          if (height > 0 && height !== sheetHeight) setSheetHeight(height);
-        }}
-      >
-        <BlurView intensity={60} tint="dark" style={styles.sheetBlur}>
-          <View style={styles.sheetCard}>
-            <View style={styles.sheetHeader}>
-              <Image source={require('../../assets/icon.png')} style={styles.sheetLogo} />
-              <Text style={styles.sheetTitle}>{strings.appName}</Text>
-              <Pressable
-                onPress={() => {
-                  playUiSound('close', 0.4);
-                  setOpen(false);
-                  scheduleDock(400);
-                }}
-                style={styles.sheetClose}
-                accessibilityLabel={strings.close}
-                hitSlop={8}
-              >
-                <FaIcon icon={faXmark} size={16} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={styles.sheetItems}>
-              {MENU_ITEMS.map((item, index) => (
-                <SheetItem
-                  key={item.action}
-                  item={item}
-                  index={index}
-                  isOn={item.action === 'touch' && touchControlsOn}
-                  open={open}
-                  onPress={() => handleAction(item.action)}
+      {/* Side panel on the left */}
+      <SidePanel visible={open} side="left" title={strings.menu} onClose={() => { setOpen(false); scheduleDock(400); }}>
+        <View style={styles.menuContent}>
+          {MENU_ITEMS.map((item) => (
+            <Pressable
+              key={item.action}
+              onPress={() => handleAction(item.action)}
+              style={({ pressed }) => [
+                styles.menuItem,
+                item.danger && styles.menuItemDanger,
+                pressed && styles.menuItemPressed,
+              ]}
+              accessibilityRole={item.action === 'touch' ? 'switch' : 'button'}
+              accessibilityState={item.action === 'touch' ? { checked: touchControlsOn } : undefined}
+            >
+              <View style={[styles.menuItemIcon, item.danger && styles.menuItemIconDanger]}>
+                <FaIcon
+                  icon={item.icon}
+                  size={18}
+                  color={item.danger ? colors.danger : touchControlsOn && item.action === 'touch' ? colors.accentBright : colors.textSecondary}
                 />
-              ))}
-            </View>
-          </View>
-        </BlurView>
-      </Animated.View>
+              </View>
+              <Text
+                style={[
+                  styles.menuItemLabel,
+                  item.danger && styles.menuItemLabelDanger,
+                  touchControlsOn && item.action === 'touch' && styles.menuItemLabelActive,
+                ]}
+              >
+                {strings[item.labelKey]}
+              </Text>
+              {item.action === 'touch' && (
+                <View style={[styles.togglePill, touchControlsOn && styles.togglePillOn]}>
+                  <View style={[styles.toggleDot, touchControlsOn && styles.toggleDotOn]} />
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      </SidePanel>
 
-      {/* Draggable liquid glass button. */}
+      {/* Draggable floating button */}
       <Animated.View
         style={[
           styles.button,
@@ -327,71 +301,9 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
       </Animated.View>
     </View>
   );
-}
+});
 
-type SheetItemProps = {
-  item: MenuItem;
-  index: number;
-  isOn: boolean;
-  onPress: () => void;
-  open: boolean;
-};
-
-function SheetItem({ item, index, isOn, onPress, open }: SheetItemProps) {
-  const translateY = useRef(new Animated.Value(-24)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (!open) {
-      translateY.setValue(-24);
-      opacity.setValue(0);
-      return;
-    }
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 280,
-        delay: 60 + index * 40,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 240,
-        delay: 60 + index * 40,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [open, index, translateY, opacity]);
-
-  return (
-    <Animated.View
-      style={[styles.sheetItemAnimated, { transform: [{ translateY }, { scale }], opacity }]}
-    >
-      <Pressable
-        onPress={onPress}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.97, speed: 40, useNativeDriver: true }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, speed: 40, useNativeDriver: true }).start()}
-        style={({ pressed }) => [styles.sheetItem, isOn && styles.sheetItemActive, pressed && styles.sheetItemPressed]}
-        accessibilityRole="button"
-      >
-        <View style={[styles.sheetItemIcon, isOn && styles.sheetItemIconActive]}>
-          <FaIcon
-            icon={item.icon}
-            size={16}
-            color={isOn ? colors.onPrimary : colors.textSecondary}
-          />
-        </View>
-        <Text style={[styles.sheetItemLabel, isOn && styles.sheetItemLabelActive]}>
-          {strings[item.labelKey]}
-        </Text>
-        {isOn ? <View style={styles.activeDot} /> : null}
-      </Pressable>
-    </Animated.View>
-  );
-}
+export default FloatingMenu;
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -403,55 +315,29 @@ const styles = StyleSheet.create({
     zIndex: 999,
     elevation: 999,
   },
-  backdrop: {
-    backgroundColor: '#000000',
+  menuContent: {
+    padding: 16,
+    gap: 6,
   },
-  sheet: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 2,
-    elevation: 2,
-  },
-  sheetBlur: {
-    width: '100%',
-    overflow: 'hidden',
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-  },
-  sheetCard: {
-    width: '100%',
-    backgroundColor: 'rgba(20, 20, 28, 0.55)',
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    paddingTop: 18,
-    paddingBottom: 14,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  sheetHeader: {
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 6,
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  sheetLogo: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  menuItemDanger: {
+    backgroundColor: 'rgba(223, 74, 74, 0.08)',
+    borderColor: 'rgba(223, 74, 74, 0.2)',
   },
-  sheetTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
+  menuItemPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
-  sheetClose: {
+  menuItemIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -461,57 +347,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  sheetItems: {
-    gap: 4,
+  menuItemIconDanger: {
+    backgroundColor: 'rgba(223, 74, 74, 0.12)',
+    borderColor: 'rgba(223, 74, 74, 0.3)',
   },
-  sheetItemAnimated: {},
-  sheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 10,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  sheetItemActive: {
-    backgroundColor: 'rgba(29, 184, 101, 0.18)',
-    borderColor: 'rgba(29, 184, 101, 0.35)',
-  },
-  sheetItemPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  sheetItemIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  sheetItemIconActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accentBright,
-  },
-  sheetItemLabel: {
+  menuItemLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     color: colors.textSecondary,
   },
-  sheetItemLabelActive: {
+  menuItemLabelActive: {
     color: colors.accentBright,
     fontWeight: '600',
   },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accentBright,
+  menuItemLabelDanger: {
+    color: colors.danger,
+    fontWeight: '600',
+  },
+  togglePill: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  togglePillOn: {
+    backgroundColor: colors.accentSoft,
+  },
+  toggleDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.textTertiary,
+  },
+  toggleDotOn: {
+    backgroundColor: colors.accent,
+    alignSelf: 'flex-end',
   },
   button: {
     position: 'absolute',

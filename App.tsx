@@ -4,7 +4,47 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar, Platform, StyleSheet, View, BackHandler } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider, MD3DarkTheme } from 'react-native-paper';
 import React from 'react';
+
+const nuvixTheme = {
+  ...MD3DarkTheme,
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: '#1DB865',
+    onPrimary: '#FFFFFF',
+    primaryContainer: '#1C4D32',
+    onPrimaryContainer: '#E8F5E9',
+    secondary: '#3EB771',
+    onSecondary: '#000000',
+    secondaryContainer: '#28654D',
+    onSecondaryContainer: '#E1F7ED',
+    tertiary: '#5DA9C9',
+    onTertiary: '#000000',
+    tertiaryContainer: '#1F4E65',
+    onTertiaryContainer: '#E2F4FC',
+    error: '#CF6679',
+    onError: '#000000',
+    errorContainer: '#36111D',
+    onErrorContainer: '#FFDAD9',
+    background: '#070A08',
+    onBackground: '#EAF2EC',
+    surface: '#0F1410',
+    onSurface: '#EAF2EC',
+    surfaceVariant: '#1C241D',
+    onSurfaceVariant: '#8CA398',
+    outline: '#3A4F42',
+    outlineVariant: '#2E4135',
+    elevation: {
+      level0: 'transparent',
+      level1: '#0F1410',
+      level2: '#131A14',
+      level3: '#161F17',
+      level4: '#192319',
+      level5: '#1C281C',
+    },
+  },
+};
 
 import BootAnimation from './src/boot/BootAnimation';
 import { useSettings } from './src/settings';
@@ -174,7 +214,9 @@ function Root() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <Root />
+      <PaperProvider theme={nuvixTheme}>
+        <Root />
+      </PaperProvider>
     </SafeAreaProvider>
   );
 }

@@ -1,18 +1,22 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
 /**
- * Modern UI sound pack for NuviX.
- * All clips are tiny (0.1–0.4 s), bundled locally, and played through
- * dedicated low-volume players so they never interfere with game audio.
+ * Modern OS-style UI sound pack for NuviX.
  *
- * License: generated for NuviX, treated as CC0 (public domain).
+ * All clips are short synthesized tones (sine-wave based, like iOS/macOS
+ * system sounds) bundled locally as WAV. They are played through dedicated
+ * low-volume players so they never interfere with game audio.
  */
 const SOUNDS = {
-  tap: require('../../assets/sounds/ui-tap.mp3'),
-  open: require('../../assets/sounds/ui-open.mp3'),
-  close: require('../../assets/sounds/ui-close.mp3'),
-  toggle: require('../../assets/sounds/ui-toggle.mp3'),
-  dock: require('../../assets/sounds/ui-dock.mp3'),
+  tap: require('../../assets/sounds/ui-tap.wav'),
+  open: require('../../assets/sounds/ui-open.wav'),
+  close: require('../../assets/sounds/ui-close.wav'),
+  toggle: require('../../assets/sounds/ui-toggle.wav'),
+  dock: require('../../assets/sounds/ui-dock.wav'),
+  navigate: require('../../assets/sounds/ui-navigate.wav'),
+  success: require('../../assets/sounds/ui-success.wav'),
+  error: require('../../assets/sounds/ui-error.wav'),
+  hover: require('../../assets/sounds/ui-hover.wav'),
 } as const;
 
 export type UiSound = keyof typeof SOUNDS;

@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import {
   faGamepad,
   faGear,
@@ -43,7 +44,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const BUTTON_SIZE = 56;
 const EDGE = 10;
-const DOCK_OPACITY = 0.45;
+const DOCK_OPACITY = 0.5;
 const ACTIVE_OPACITY = 1;
 const INACTIVITY_MS = 3000;
 const TAP_SLOP = 6;
@@ -58,22 +59,8 @@ const screen = Dimensions.get('window');
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-/**
- * Dynamic floating button + options sheet.
- *
- * - Shows the NuviX app logo.
- * - Fully draggable anywhere on screen.
- * - While docked at an edge it rests semi-transparent; touching it wakes it
- *   back up to full opacity.
- * - If the user parks it near the middle of the screen, 3 seconds of
- *   inactivity snap it to the nearest left/right edge (with a dock sound).
- * - Tapping opens an options sheet that drops from the top of the screen,
- *   like a notification shade.
- */
 export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
   const [open, setOpen] = useState(false);
-  // Real height of the options sheet, measured on first layout so that the
-  // closed state can hide it completely.
   const [sheetHeight, setSheetHeight] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
   const position = useRef(
@@ -148,7 +135,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
         useNativeDriver: true,
       }),
     ]).start();
-    playUiSound('dock', 0.35);
+    playUiSound('dock', 0.3);
   };
 
   const scheduleDock = (delay = INACTIVITY_MS) => {
@@ -164,7 +151,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (event) => {
+      onPanResponderGrant: () => {
         moved.current = false;
         dragStart.current = { ...positionRef.current };
         wake();
@@ -196,7 +183,6 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
       },
       onPanResponderRelease: (_event, gesture) => {
         if (!moved.current) {
-          // Tap: open the options sheet.
           playUiSound('open', 0.4);
           Animated.spring(scale, {
             toValue: 1,
@@ -217,7 +203,6 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
         if (nearEdge) {
           dockToEdge();
         } else {
-          // Parked in the middle: keep it awake here for 3 s, then dock.
           Animated.spring(scale, {
             toValue: 1,
             speed: 25,
@@ -245,7 +230,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
   });
   const backdropOpacity = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 0.5],
+    outputRange: [0, 0.55],
   });
 
   const handleAction = (action: MenuAction) => {
@@ -273,7 +258,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
         </Animated.View>
       ) : null}
 
-      {/* Options sheet dropping from the top, like a notification shade. */}
+      {/* Liquid glass options sheet dropping from the top. */}
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: sheetTranslate }] }]}
         pointerEvents={open ? 'auto' : 'none'}
@@ -282,39 +267,41 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
           if (height > 0 && height !== sheetHeight) setSheetHeight(height);
         }}
       >
-        <View style={styles.sheetCard}>
-          <View style={styles.sheetHeader}>
-            <Image source={require('../../assets/icon.png')} style={styles.sheetLogo} />
-            <Text style={styles.sheetTitle}>{strings.appName}</Text>
-            <Pressable
-              onPress={() => {
-                playUiSound('close', 0.4);
-                setOpen(false);
-                scheduleDock(400);
-              }}
-              style={styles.sheetClose}
-              accessibilityLabel={strings.close}
-              hitSlop={8}
-            >
-              <FaIcon icon="xmark" size={16} color={colors.textSecondary} />
-            </Pressable>
+        <BlurView intensity={60} tint="dark" style={styles.sheetBlur}>
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHeader}>
+              <Image source={require('../../assets/icon.png')} style={styles.sheetLogo} />
+              <Text style={styles.sheetTitle}>{strings.appName}</Text>
+              <Pressable
+                onPress={() => {
+                  playUiSound('close', 0.4);
+                  setOpen(false);
+                  scheduleDock(400);
+                }}
+                style={styles.sheetClose}
+                accessibilityLabel={strings.close}
+                hitSlop={8}
+              >
+                <FaIcon icon="xmark" size={16} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={styles.sheetItems}>
+              {MENU_ITEMS.map((item, index) => (
+                <SheetItem
+                  key={item.action}
+                  item={item}
+                  index={index}
+                  isOn={item.action === 'touch' && touchControlsOn}
+                  open={open}
+                  onPress={() => handleAction(item.action)}
+                />
+              ))}
+            </View>
           </View>
-          <View style={styles.sheetItems}>
-            {MENU_ITEMS.map((item, index) => (
-              <SheetItem
-                key={item.action}
-                item={item}
-                index={index}
-                isOn={item.action === 'touch' && touchControlsOn}
-                open={open}
-                onPress={() => handleAction(item.action)}
-              />
-            ))}
-          </View>
-        </View>
+        </BlurView>
       </Animated.View>
 
-      {/* Draggable logo button. */}
+      {/* Draggable liquid glass button. */}
       <Animated.View
         style={[
           styles.button,
@@ -352,6 +339,7 @@ type SheetItemProps = {
 function SheetItem({ item, index, isOn, onPress, open }: SheetItemProps) {
   const translateY = useRef(new Animated.Value(-24)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!open) {
@@ -362,15 +350,15 @@ function SheetItem({ item, index, isOn, onPress, open }: SheetItemProps) {
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 260,
-        delay: 80 + index * 45,
+        duration: 280,
+        delay: 60 + index * 40,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
         toValue: 1,
         duration: 240,
-        delay: 80 + index * 45,
+        delay: 60 + index * 40,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
@@ -379,10 +367,12 @@ function SheetItem({ item, index, isOn, onPress, open }: SheetItemProps) {
 
   return (
     <Animated.View
-      style={[styles.sheetItemAnimated, { transform: [{ translateY }], opacity }]}
+      style={[styles.sheetItemAnimated, { transform: [{ translateY }, { scale }], opacity }]}
     >
       <Pressable
         onPress={onPress}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.97, speed: 40, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, speed: 40, useNativeDriver: true }).start()}
         style={({ pressed }) => [styles.sheetItem, isOn && styles.sheetItemActive, pressed && styles.sheetItemPressed]}
         accessibilityRole="button"
       >
@@ -424,23 +414,24 @@ const styles = StyleSheet.create({
     zIndex: 2,
     elevation: 2,
   },
+  sheetBlur: {
+    width: '100%',
+    overflow: 'hidden',
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
   sheetCard: {
     width: '100%',
-    backgroundColor: colors.surfaceContainer,
+    backgroundColor: 'rgba(20, 20, 28, 0.55)',
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
     borderWidth: 1,
     borderTopWidth: 0,
-    borderColor: colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     paddingTop: 18,
     paddingBottom: 14,
     paddingHorizontal: 14,
     gap: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 14,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -463,9 +454,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.surfaceVariant,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   sheetItems: {
     gap: 4,
@@ -478,23 +471,30 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 10,
     borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   sheetItemActive: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: 'rgba(29, 184, 101, 0.18)',
+    borderColor: 'rgba(29, 184, 101, 0.35)',
   },
   sheetItemPressed: {
-    backgroundColor: colors.surfaceContainerHighest,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   sheetItemIcon: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: colors.surfaceVariant,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   sheetItemIconActive: {
     backgroundColor: colors.accent,
+    borderColor: colors.accentBright,
   },
   sheetItemLabel: {
     flex: 1,
@@ -524,14 +524,9 @@ const styles = StyleSheet.create({
     height: BUTTON_SIZE,
     borderRadius: radius.pill,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: 'rgba(20, 20, 28, 0.55)',
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10,
+    borderColor: 'rgba(29, 184, 101, 0.5)',
   },
   buttonHit: {
     width: '100%',

@@ -1,6 +1,21 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
-  }
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["expo/vector-icons"]
+  },
+  "include": [
+    "src/**/*",
+    "App.tsx",
+    "index.ts",
+    "index.web.ts"
+  ],
+  "exclude": ["node_modules", "android", "ios"]
 }

@@ -2,10 +2,9 @@ import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { StatusBar, Platform, StyleSheet, View, BackHandler } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React from 'react';
 
 import BootAnimation from './src/boot/BootAnimation';
 import { useSettings } from './src/settings';
@@ -20,22 +19,22 @@ const KEEP_AWAKE_TAG = 'xcloud-play';
 
 function Root() {
   const { settings, update, reset } = useSettings();
-  const [booting, setBooting] = useState(true);
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const webRef = useRef<GameWebViewHandle>(null);
+  const [booting, setBooting] = React.useState(true);
+  const [settingsVisible, setSettingsVisible] = React.useState(false);
+  const webRef = React.useRef<GameWebViewHandle>(null);
 
   // The app always runs in landscape, including the boot animation.
-  useEffect(() => {
+  React.useEffect(() => {
     if (Platform.OS === 'web') return;
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => undefined);
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     SplashScreen.hideAsync().catch(() => undefined);
   }, []);
 
   // Keep the screen on while a stream is running.
-  useEffect(() => {
+  React.useEffect(() => {
     if (!settings.keepAwake) {
       deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
       return;
@@ -47,7 +46,7 @@ function Root() {
   }, [settings.keepAwake]);
 
   // Force app into fullscreen mode on start
-  useEffect(() => {
+  React.useEffect(() => {
     const requestFullscreen = () => {
       const doc = document as any;
       if (doc.documentElement) {
@@ -65,22 +64,30 @@ function Root() {
     };
   }, []);
 
-  useEffect(() => {
+  // Android Back button handling
+  React.useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+    
+    const onBackPress = () => {
       if (settingsVisible) {
         setSettingsVisible(false);
         return true;
       }
-      // In fullscreen, go back to home instead of exiting
+      if (settings.touchControls) {
+        update({ touchControls: false });
+        return true;
+      }
+      // Navigate to home in the webview
       webRef.current?.goHome();
       return true;
-    });
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => subscription.remove();
-  }, [settingsVisible]);
+  }, [settingsVisible, settings.touchControls, update]);
 
   // Rumble coming from the real gamepad through the website.
-  const handleMessage = useCallback((message: Record<string, unknown>) => {
+  const handleMessage = React.useCallback((message: Record<string, unknown>) => {
     if (message.type !== 'haptic') return;
     if (Platform.OS === 'web') return;
     const intensity = Number(message.intensity ?? 1);
@@ -95,11 +102,11 @@ function Root() {
     Haptics.impactAsync(style).catch(() => undefined);
   }, []);
 
-  const runTouchScript = useCallback((script: string) => {
+  const runTouchScript = React.useCallback((script: string) => {
     webRef.current?.run(script);
   }, []);
 
-  const handleAction = useCallback(
+  const handleAction = React.useCallback(
     (action: string) => {
       switch (action) {
         case 'home':
@@ -115,7 +122,10 @@ function Root() {
           setSettingsVisible(true);
           break;
         case 'exit':
-          BackHandler.exitApp();
+          if (Platform.OS === 'android') {
+            // Try to finish the activity
+            BackHandler.exitApp();
+          }
           break;
         default:
           break;

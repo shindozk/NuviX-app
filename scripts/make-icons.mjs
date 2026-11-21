@@ -4,18 +4,24 @@ import sharp from 'sharp';
 
 const root = resolve(import.meta.dirname, '..');
 
-/** Green cloud with the Xbox-style X, drawn as SVG so the art stays crisp. */
+/**
+ * NuviX Logo - Cloud with Xbox X
+ * A modern, cloud-shaped design with a stylized X for Xbox gaming
+ */
 function artwork(scale, monochrome = false) {
   const size = 1024;
-  const cloud = monochrome ? '#FFFFFF' : 'url(#cloud)';
-  const x = monochrome ? '#FFFFFF' : 'url(#x)';
+  const primary = monochrome ? '#FFFFFF' : '#1DB865';
+  const cloud = monochrome ? '#FFFFFF' : '#2BE31F';
+  const shadow = monochrome ? '#FFFFFF' : '#0A6B0A';
+
+  // Cloud shape with X overlay
   const art = `
     <defs>
-      <linearGradient id="cloud" x1="0" y1="0" x2="0" y2="1">
+      <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#2BE31F"/>
         <stop offset="1" stop-color="#0A6B0A"/>
       </linearGradient>
-      <linearGradient id="x" x1="0" y1="0" x2="1" y2="1">
+      <linearGradient id="xGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#FFFFFF"/>
         <stop offset="1" stop-color="#DFFFDA"/>
       </linearGradient>
@@ -28,7 +34,9 @@ function artwork(scale, monochrome = false) {
       </filter>
     </defs>
     <g transform="translate(${512 - 512 * scale} ${512 - 512 * scale}) scale(${scale})">
-      <g ${monochrome ? '' : 'filter="url(#glow)"'}>
+      ${monochrome ? '' : 'filter="url(#glow)"'}
+      <g>
+        <!-- Cloud shape -->
         <path fill="${cloud}" d="
           M 278 690
           a 150 150 0 0 1 6 -298
@@ -36,12 +44,17 @@ function artwork(scale, monochrome = false) {
           a 168 168 0 0 1 130 160
           a 132 132 0 0 1 -24 216
           Z"/>
-      </g>
-      <g fill="${x}" transform="rotate(45 512 520)">
-        <rect x="478" y="342" width="68" height="356" rx="34"/>
-      </g>
-      <g fill="${x}" transform="rotate(-45 512 520)">
-        <rect x="478" y="342" width="68" height="356" rx="34"/>
+        <!-- X symbol -->
+        <g fill="${primary}">
+          <rect x="478" y="342" width="68" height="356" rx="34" transform="rotate(45 512 520)"/>
+          <rect x="478" y="342" width="68" height="356" rx="34" transform="rotate(-45 512 520)"/>
+        </g>
+        <!-- Sparkles effect -->
+        <g fill="${primary}" opacity="0.6">
+          <circle cx="420" cy="420" r="4"/>
+          <circle cx="600" cy="420" r="4"/>
+          <circle cx="512" cy="480" r="4"/>
+        </g>
       </g>
     </g>
   `;
@@ -56,6 +69,9 @@ const files = [
   { name: 'splash-icon.png', size: 512, background: null, scale: 0.92 },
   { name: 'favicon.png', size: 48, background: '#070A08', scale: 0.82 },
 ];
+
+console.log('NuviX Icon Generator\n');
+console.log('Generating icons...\n');
 
 for (const file of files) {
   const path = resolve(root, 'assets', file.name);
@@ -73,7 +89,7 @@ for (const file of files) {
       .png()
       .toBuffer();
     await writeFile(path, solid);
-    console.log(`wrote assets/${file.name}`);
+    console.log(`✓ wrote assets/${file.name} (solid background)`);
     continue;
   }
 
@@ -98,5 +114,8 @@ for (const file of files) {
   } else {
     await writeFile(path, png);
   }
-  console.log(`wrote assets/${file.name}`);
+  console.log(`✓ wrote assets/${file.name}`);
 }
+
+console.log('\n✅ All icons generated successfully!');
+console.log('   You can now run: npm start');

@@ -1,165 +1,399 @@
-import { useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Dimensions,
+} from 'react-native';
 
+import { colors, radius, duration, easing } from '../theme';
 import { strings } from '../i18n';
-import { colors } from '../theme';
 
 export type MenuAction = 'home' | 'reload' | 'touch' | 'settings' | 'exit';
+
+type MenuItem = {
+  action: MenuAction;
+  icon: string;
+  labelKey: keyof typeof strings;
+};
+
+const MENU_ITEMS: MenuItem[] = [
+  { action: 'home', icon: '🏠', labelKey: 'home' },
+  { action: 'reload', icon: '🔄', labelKey: 'reload' },
+  { action: 'touch', icon: '🎮', labelKey: 'touchControls' },
+  { action: 'settings', icon: '⚙️', labelKey: 'settings' },
+  { action: 'exit', icon: '🚪', labelKey: 'exit' },
+];
 
 type Props = {
   onAction: (action: MenuAction) => void;
   touchControlsOn: boolean;
 };
 
-const ITEMS: { action: MenuAction; glyph: string; labelKey: keyof typeof strings }[] = [
-  { action: 'home', glyph: '⌂', labelKey: 'home' },
-  { action: 'reload', glyph: '⟳', labelKey: 'reload' },
-  { action: 'touch', glyph: '◉', labelKey: 'touchControls' },
-  { action: 'settings', glyph: '⚙', labelKey: 'settings' },
-  { action: 'exit', glyph: '⎋', labelKey: 'exit' },
-];
-
-/**
- * Draggable floating button that opens the app shortcuts.
- */
 export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
   const [open, setOpen] = useState(false);
-  const translate = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const start = useRef({ x: 0, y: 0 });
-  const dragged = useRef(false);
+  const [translateY, setTranslateY] = useState(new Animated.Value(0));
+  const [scale, setScale] = useState(new Animated.Value(1));
+  const [opacity, setOpacity] = useState(new Animated.Value(0));
+  const [backgroundOpacity, setBackgroundOpacity] = useState(new Animated.Value(0));
+  const [dragging, setDragging] = useState(false);
+
+  // Calculate screen position
+  const { height } = Dimensions.get('window');
+  const menuHeight = 300;
+
+  const animateOpen = () => {
+    setOpen(true);
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -menuHeight + 60,
+        duration: duration.medium,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.bezier(0.25, 0.8, 0.25, 1)),
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: duration.medium,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+    ]).start();
+
+    Animated.timing(backgroundOpacity, {
+      toValue: 0.5,
+      duration: duration.medium,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateClose = () => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: duration.short,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.quad),
+      }),
+      Animated.spring(scale, {
+        toValue: 0.95,
+        damping: 20,
+        stiffness: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: duration.short,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.quad),
+      }),
+    ]).start(() => setOpen(false));
+
+    Animated.timing(backgroundOpacity, {
+      toValue: 0,
+      duration: duration.short,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const toggleMenu = () => {
+    if (open) {
+      animateClose();
+    } else {
+      animateOpen();
+    }
+  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_event, gesture) =>
+      onMoveShouldSetPanResponder: (_, gesture) =>
         Math.abs(gesture.dx) + Math.abs(gesture.dy) > 6,
       onPanResponderGrant: () => {
-        dragged.current = false;
-        translate.stopAnimation((value) => {
-          start.current = value;
-        });
+        setDragging(true);
+        translateY.stopAnimation();
       },
-      onPanResponderMove: (_event, gesture) => {
-        if (Math.abs(gesture.dx) + Math.abs(gesture.dy) > 6) dragged.current = true;
-        translate.setValue({ x: start.current.x + gesture.dx, y: start.current.y + gesture.dy });
+      onPanResponderMove: (_, gesture) => {
+        if (Math.abs(gesture.dx) + Math.abs(gesture.dy) > 6) {
+          translateY.setValue(gesture.dy);
+        }
       },
-      onPanResponderRelease: () => {
-        translate.flattenOffset();
-      },
-      onPanResponderTerminate: () => {
-        translate.flattenOffset();
+      onPanResponderRelease: (_, gesture) => {
+        setDragging(false);
+        if (!open && gesture.dy < 0 && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 30) {
+          animateOpen();
+        } else if (open && Math.abs(gesture.dy) > 50) {
+          animateClose();
+        } else {
+          translateY.setValue(0);
+        }
       },
     })
   ).current;
 
-  const handlePress = () => {
-    if (dragged.current) {
-      dragged.current = false;
-      return;
-    }
-    setOpen((value) => !value);
+  const handleAction = (action: MenuAction) => {
+    animateClose();
+    setTimeout(() => onAction(action), duration.short);
   };
 
   return (
-    <Animated.View
-      style={[styles.wrapper, { transform: translate.getTranslateTransform() }]}
-      {...panResponder.panHandlers}
-    >
-      {open && (
-        <View style={styles.menu}>
-          {ITEMS.map((item) => {
-            const active = item.action === 'touch' && touchControlsOn;
+    <View style={styles.wrapper}>
+      {/* Background overlay */}
+      <Animated.View
+        style={[
+          styles.background,
+          { opacity: backgroundOpacity },
+          open && styles.backgroundActive,
+        ]}
+        pointerEvents={open ? 'auto' : 'none'}
+      >
+        <Pressable onPress={animateClose} style={styles.backgroundTouchable} />
+      </Animated.View>
+
+      {/* Floating menu */}
+      <Animated.View
+        style={[
+          styles.menu,
+          {
+            transform: [{ translateY }, { scale }],
+            opacity,
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.menuContainer}>
+          {MENU_ITEMS.map((item, index) => {
+            const isOn = item.action === 'touch' && touchControlsOn;
             return (
-              <Pressable
+              <MenuItem
                 key={item.action}
-                style={({ pressed }) => [styles.item, (pressed || active) && styles.itemActive]}
-                onPress={() => {
-                  setOpen(false);
-                  onAction(item.action);
-                }}
-              >
-                <Text style={styles.itemGlyph}>{item.glyph}</Text>
-                <Text style={styles.itemLabel}>{strings[item.labelKey]}</Text>
-                {active && <View style={styles.dot} />}
-              </Pressable>
+                item={item}
+                index={index}
+                isOn={isOn}
+                onPress={() => handleAction(item.action)}
+                open={open}
+              />
             );
           })}
         </View>
-      )}
 
-      <Pressable
-        onPress={handlePress}
-        style={({ pressed }) => [styles.handle, pressed && styles.handlePressed]}
-        accessibilityLabel={strings.menu}
-      >
-        <Text style={styles.handleGlyph}>{open ? '×' : '≡'}</Text>
-      </Pressable>
+        {/* Floating button */}
+        <Pressable
+          onPress={toggleMenu}
+          style={({ pressed }) => [
+            styles.floatingButton,
+            pressed && styles.floatingButtonPress,
+          ]}
+          accessibilityLabel={open ? strings.close : strings.menu}
+        >
+          <Text style={styles.floatingIcon}>{open ? '×' : '≡'}</Text>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
+type MenuItemProps = {
+  item: MenuItem;
+  index: number;
+  isOn: boolean;
+  onPress: () => void;
+  open: boolean;
+};
+
+function MenuItem({ item, index, isOn, onPress, open }: MenuItemProps) {
+  const scale = useRef(new Animated.Value(0.95)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (open) {
+      Animated.parallel([
+        Animated.spring(scale, {
+          toValue: 1,
+          damping: 20,
+          stiffness: 150,
+          useNativeDriver: true,
+          delay: index * 40,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+          delay: index * 40,
+          easing: Easing.out(Easing.quad),
+        }),
+      ]).start();
+    }
+  }, [open, index, scale, opacity]);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ scale }],
+        opacity,
+      }}
+    >
+      <MenuButtonItem item={item} isOn={isOn} onPress={onPress} />
     </Animated.View>
   );
 }
 
+type MenuButtonItemProps = {
+  item: MenuItem;
+  isOn: boolean;
+  onPress: () => void;
+};
+
+function MenuButtonItem({ item, isOn, onPress }: MenuButtonItemProps) {
+  const pressAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(pressAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={({ pressed }) => [
+        styles.menuItem,
+        isOn && styles.menuItemActive,
+        pressed && styles.menuItemPress,
+        { transform: [{ scale: pressAnim }] },
+      ]}
+    >
+      <Text style={[styles.menuItemIcon, isOn && styles.menuItemIconActive]}>
+        {item.icon}
+      </Text>
+      <Text style={[styles.menuItemLabel, isOn && styles.menuItemLabelActive]}>
+        {strings[item.labelKey]}
+      </Text>
+      {isOn && <View style={styles.indicatorBadge} />}
+    </Pressable>
+  );
+}
+
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    top: 18,
-    right: 18,
-    alignItems: 'flex-end',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    pointerEvents: 'none',
   },
-  handle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(16, 23, 19, 0.88)',
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
   },
-  handlePressed: {
-    backgroundColor: colors.accent,
+  backgroundActive: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  handleGlyph: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 22,
+  backgroundTouchable: {
+    flex: 1,
   },
   menu: {
-    marginBottom: 10,
-    backgroundColor: 'rgba(12, 18, 15, 0.96)',
+    position: 'absolute',
+    bottom: 100,
+    left: (width - 240) / 2,
+    width: 240,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    minWidth: 190,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  item: {
+  menuContainer: {
+    padding: 16,
+    gap: 8,
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: -30,
+    left: '50%',
+    marginLeft: -30,
+    width: 60,
+    height: 60,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  floatingButtonPress: {
+    transform: [{ scale: 0.95 }],
+  },
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    gap: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
-  itemActive: {
+  menuItemActive: {
     backgroundColor: colors.accentSoft,
   },
-  itemGlyph: {
-    color: colors.accentBright,
-    fontSize: 15,
-    width: 18,
+  menuItemPress: {
+    opacity: 0.9,
+  },
+  menuItemIcon: {
+    fontSize: 20,
+    width: 24,
     textAlign: 'center',
   },
-  itemLabel: {
-    color: colors.text,
-    fontSize: 14,
+  menuItemIconActive: {
+    color: colors.accentBright,
   },
-  dot: {
-    marginLeft: 'auto',
-    width: 7,
-    height: 7,
+  menuItemLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  menuItemLabelActive: {
+    color: colors.accentBright,
+    fontWeight: '600',
+  },
+  indicatorBadge: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
     backgroundColor: colors.accentBright,
+    marginLeft: 'auto',
   },
 });

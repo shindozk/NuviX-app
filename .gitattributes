@@ -1,0 +1,22 @@
+# Text files
+*.ts text
+*.tsx text
+*.tsx text
+*.tsx text
+*.json text
+*.md text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.png binary
+
+# Export line endings
+* text=auto eol=lf
+
+# Detect significant files
+*.tsx diff=tsx

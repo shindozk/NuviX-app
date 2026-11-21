@@ -1,8 +1,20 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import {
+  Animated,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  Dimensions,
+} from 'react-native';
 
-import { strings } from '../i18n';
-import { colors, radius } from '../theme';
+import { colors, radius, duration, easing } from '../theme';
 import { ZOOM_OPTIONS, type Settings, type UserAgentMode } from '../settings';
+import { strings } from '../i18n';
 
 type Props = {
   visible: boolean;
@@ -20,15 +32,6 @@ const UA_OPTIONS: { mode: UserAgentMode; label: string }[] = [
   { mode: 'custom', label: strings.uaCustom },
 ];
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
 export default function SettingsPanel({
   visible,
   settings,
@@ -37,33 +40,92 @@ export default function SettingsPanel({
   onLogin,
   onReset,
 }: Props) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: duration.medium,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.bezier(0.25, 0.8, 0.25, 1)),
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: duration.medium,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.quad),
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 500,
+          duration: duration.short,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.quad),
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: duration.short,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.quad),
+        }),
+      ]).start();
+    }
+  }, [visible, translateY, opacity]);
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.panel}>
+    <Modal visible={true} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View
+        style={[
+          styles.backdrop,
+          { opacity },
+        ]}
+        pointerEvents="none"
+      >
+        <Pressable onPress={onClose} style={styles.backdropTouchable} />
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+          pointerEvents="auto"
+        >
           <View style={styles.header}>
             <Text style={styles.title}>{strings.settingsTitle}</Text>
-            <Pressable onPress={onClose} style={styles.closeButton} accessibilityLabel={strings.close}>
+            <Pressable
+              onPress={onClose}
+              style={styles.closeButton}
+              accessibilityLabel={strings.close}
+            >
               <Text style={styles.closeGlyph}>×</Text>
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
             <Section title={strings.userAgent}>
               <Text style={styles.hint}>{strings.userAgentHint}</Text>
               <View style={styles.chips}>
                 {UA_OPTIONS.map((option) => {
                   const active = settings.userAgentMode === option.mode;
                   return (
-                    <Pressable
+                    <ChipButton
                       key={option.mode}
+                      active={active}
                       onPress={() => onChange({ userAgentMode: option.mode })}
-                      style={[styles.chip, active && styles.chipActive]}
                     >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
+                      {option.label}
+                    </ChipButton>
                   );
                 })}
               </View>
@@ -86,39 +148,25 @@ export default function SettingsPanel({
                 {ZOOM_OPTIONS.map((option) => {
                   const active = settings.zoom === option;
                   return (
-                    <Pressable
-                      key={option}
-                      onPress={() => onChange({ zoom: option })}
-                      style={[styles.chip, active && styles.chipActive]}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {option}%
-                      </Text>
-                    </Pressable>
+                    <ChipButton key={option} active={active} onPress={() => onChange({ zoom: option })}>
+                      {option}%
+                    </ChipButton>
                   );
                 })}
               </View>
             </Section>
 
             <Section title={strings.behavior}>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>{strings.keepAwake}</Text>
-                <Switch
-                  value={settings.keepAwake}
-                  onValueChange={(value) => onChange({ keepAwake: value })}
-                  trackColor={{ false: colors.border, true: colors.accent }}
-                  thumbColor={settings.keepAwake ? colors.accentBright : colors.textDim}
-                />
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>{strings.touchControlsToggle}</Text>
-                <Switch
-                  value={settings.touchControls}
-                  onValueChange={(value) => onChange({ touchControls: value })}
-                  trackColor={{ false: colors.border, true: colors.accent }}
-                  thumbColor={settings.touchControls ? colors.accentBright : colors.textDim}
-                />
-              </View>
+              <ToggleRow
+                label={strings.keepAwake}
+                value={settings.keepAwake}
+                onValueChange={(value) => onChange({ keepAwake: value })}
+              />
+              <ToggleRow
+                label={strings.touchControlsToggle}
+                value={settings.touchControls}
+                onValueChange={(value) => onChange({ touchControls: value })}
+              />
             </Section>
 
             <Section title={strings.account}>
@@ -129,7 +177,10 @@ export default function SettingsPanel({
             </Section>
 
             <Section title={strings.data}>
-              <Pressable onPress={onReset} style={[styles.wideButton, styles.dangerButton]}>
+              <Pressable
+                onPress={onReset}
+                style={[styles.wideButton, styles.dangerButton]}
+              >
                 <Text style={[styles.wideButtonText, styles.dangerText]}>
                   {strings.resetSettings}
                 </Text>
@@ -141,72 +192,163 @@ export default function SettingsPanel({
             </Text>
             <Text style={styles.footer}>{strings.notOfficial}</Text>
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
 
+type SectionProps = {
+  title: string;
+  children: React.ReactNode;
+};
+
+function Section({ title, children }: SectionProps) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+type ChipButtonProps = {
+  active: boolean;
+  onPress: () => void;
+  children: React.ReactNode;
+};
+
+function ChipButton({ active, onPress, children }: ChipButtonProps) {
+  const pressAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(pressAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={({ pressed }) => [
+        styles.chip,
+        active && styles.chipActive,
+        pressed && styles.chipPress,
+        { transform: [{ scale: pressAnim }] },
+      ]}
+    >
+      <Animated.Text
+        style={[
+          styles.chipText,
+          active && styles.chipTextActive,
+          { color: active ? colors.background : colors.textSecondary },
+        ]}
+      >
+        {children}
+      </Animated.Text>
+    </Pressable>
+  );
+}
+
+type ToggleRowProps = {
+  label: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+};
+
+function ToggleRow({ label, value, onValueChange }: ToggleRowProps) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: colors.border, true: colors.accent }}
+        thumbColor={value ? colors.accentBright : colors.textDim}
+      />
+    </View>
+  );
+}
+
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
-    justifyContent: 'center',
-    paddingHorizontal: 60,
-    paddingVertical: 18,
+    backgroundColor: '#000000',
+  },
+  backdropTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   panel: {
-    flex: 1,
-    backgroundColor: colors.panel,
-    borderRadius: radius.lg,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   title: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '700',
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
   },
   closeButton: {
-    marginLeft: 'auto',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.panelSoft,
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceVariant,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   closeGlyph: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 20,
+    color: colors.textPrimary,
+    fontSize: 20,
+    lineHeight: 22,
   },
   content: {
     padding: 20,
-    gap: 18,
+    gap: 24,
   },
   section: {
-    gap: 8,
+    gap: 12,
   },
   sectionTitle: {
-    color: colors.accentBright,
-    fontSize: 11,
-    letterSpacing: 1.4,
+    color: colors.textSecondary,
+    fontSize: 12,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
   hint: {
-    color: colors.textDim,
-    fontSize: 12,
-    lineHeight: 17,
+    color: colors.textTertiary,
+    fontSize: 13,
+    lineHeight: 20,
   },
   chips: {
     flexDirection: 'row',
@@ -214,35 +356,40 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.panelSoft,
+    backgroundColor: colors.surface,
   },
   chipActive: {
-    borderColor: colors.accentBright,
+    borderColor: colors.accent,
     backgroundColor: colors.accentSoft,
   },
+  chipPress: {
+    opacity: 0.9,
+  },
   chipText: {
-    color: colors.textDim,
+    color: colors.textSecondary,
     fontSize: 13,
+    fontWeight: '500',
   },
   chipTextActive: {
-    color: colors.text,
+    color: colors.accentBright,
     fontWeight: '600',
   },
   input: {
-    marginTop: 4,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.sm,
-    padding: 10,
-    color: colors.text,
-    fontSize: 12,
-    minHeight: 52,
+    padding: 12,
+    color: colors.textPrimary,
+    fontSize: 13,
+    minHeight: 50,
     textAlignVertical: 'top',
+    backgroundColor: colors.surface,
   },
   row: {
     flexDirection: 'row',
@@ -251,21 +398,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   rowLabel: {
-    color: colors.text,
+    color: colors.textPrimary,
     fontSize: 14,
   },
   wideButton: {
     alignSelf: 'flex-start',
-    paddingVertical: 9,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.panelSoft,
+    backgroundColor: colors.surface,
   },
   wideButtonText: {
-    color: colors.text,
+    color: colors.textPrimary,
     fontSize: 13,
+    fontWeight: '500',
   },
   dangerButton: {
     borderColor: 'rgba(217, 83, 79, 0.5)',
@@ -274,7 +422,7 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
   footer: {
-    color: colors.textDim,
+    color: colors.textTertiary,
     fontSize: 11,
     textAlign: 'center',
   },

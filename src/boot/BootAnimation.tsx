@@ -1,10 +1,10 @@
 import { useEvent } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Animated } from 'react-native';
 
 import { strings } from '../i18n';
-import { colors } from '../theme';
+import { colors, radius, duration, easing } from '../theme';
 
 type Props = {
   onFinish: () => void;
@@ -17,6 +17,7 @@ type Props = {
 export default function BootAnimation({ onFinish }: Props) {
   const finished = useRef(false);
   const [tapHintVisible, setTapHintVisible] = useState(true);
+  const opacity = useRef(new Animated.Value(0)).current;
 
   const player = useVideoPlayer(require('../../assets/boot.mp4'), (instance) => {
     instance.loop = false;
@@ -30,8 +31,14 @@ export default function BootAnimation({ onFinish }: Props) {
   const finish = useCallback(() => {
     if (finished.current) return;
     finished.current = true;
-    onFinish();
-  }, [onFinish]);
+    Animated.timing(opacity, {
+      toValue: 0,
+      duration: duration.short,
+      useNativeDriver: true,
+    }).start(() => {
+      onFinish();
+    });
+  }, [onFinish, opacity]);
 
   useEffect(() => {
     const subscription = player.addListener('playToEnd', finish);
@@ -49,9 +56,24 @@ export default function BootAnimation({ onFinish }: Props) {
 
   useEffect(() => {
     if (!isPlaying) return;
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: duration.short,
+      useNativeDriver: true,
+    }).start();
     const timer = setTimeout(() => setTapHintVisible(false), 2500);
     return () => clearTimeout(timer);
-  }, [isPlaying]);
+  }, [isPlaying, opacity]);
+
+  useEffect(() => {
+    if (tapHintVisible) {
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: duration.short,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [tapHintVisible, opacity]);
 
   return (
     <Pressable style={styles.root} onPress={finish} accessibilityLabel={strings.bootSkip}>
@@ -62,9 +84,15 @@ export default function BootAnimation({ onFinish }: Props) {
         contentFit="cover"
         allowsPictureInPicture={false}
       />
-      <View style={styles.bottom}>
-        <Text style={[styles.skip, !tapHintVisible && styles.skipHidden]}>{strings.bootSkip}</Text>
-      </View>
+      <Animated.View
+        style={[
+          styles.bottom,
+          { opacity: opacity },
+          !tapHintVisible && styles.skipHidden,
+        ]}
+      >
+        <Text style={styles.skip}>{strings.bootSkip}</Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -82,7 +110,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   skip: {
-    color: colors.textDim,
+    color: colors.textSecondary,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',

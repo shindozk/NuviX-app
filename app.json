@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "XCloud Play",
-    "slug": "xcloud-play",
+    "name": "NuviX",
+    "slug": "nuvi-x",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
@@ -16,12 +16,15 @@
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationLandscapeLeft",
           "UIInterfaceOrientationLandscapeRight"
-        ]
+        ],
+        "NSCameraUsageDescription": "O app precisa da câmera para jogos compatíveis com AR.",
+        "NSMicrophoneUsageDescription": "O app precisa do microfone para jogos com chat de voz.",
+        "NSLocationWhenInUseUsageDescription": "O app pode usar a localização para jogos compatíveis."
       }
     },
     "android": {
-      "package": "com.xcloudplay.app",
-      "versionCode": 1,
+      "package": "com.nuvix.app",
+      "versionCode": 2,
       "userInterfaceStyle": "dark",
       "adaptiveIcon": {
         "backgroundColor": "#070A08",
@@ -31,9 +34,20 @@
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.CAMERA",
+        "android.permission.MICROPHONE"
       ],
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "edgeToEdge": true
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#070A08",
+      "theme": {
+        "dark": true
+      }
     },
     "plugins": [
       [
@@ -47,10 +61,6 @@
       ],
       "expo-video",
       "expo-localization"
-    ],
-    "web": {
-      "bundler": "metro",
-      "favicon": "./assets/favicon.png"
-    }
+    ]
   }
 }

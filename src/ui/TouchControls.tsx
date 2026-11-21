@@ -32,7 +32,8 @@ type Props = {
   run: (script: string) => void;
 };
 
-// Button indices for the virtual gamepad bridge (window.__xcpPad).
+// Button indices for the virtual gamepad bridge (window.__xcpPad) using the
+// standard W3C gamepad button layout.
 const BUTTON_INDICES = {
   A: 0,
   B: 1,
@@ -42,36 +43,60 @@ const BUTTON_INDICES = {
   RB: 5,
   LT: 6,
   RT: 7,
-  VIEW: 8,
-  MENU: 9,
-  UP: 13,
-  DOWN: 14,
-  LEFT: 11,
-  RIGHT: 12,
+  VIEW: 8, // Select / Back
+  MENU: 9, // Start / Menu
+  L3: 10,
+  R3: 11,
+  UP: 12,
+  DOWN: 13,
+  LEFT: 14,
+  RIGHT: 15,
 } as const;
 
-const STICK_RADIUS = 62;
-const KNOB_RADIUS = 30;
+// Winlator "Virtual Gamepad" profile (controls-3.icp) normalized layout.
+// Coordinates are fractions of screen width/height (0..1); scale multiplies U.
+const U_BASE = 0.065;
+const WINLATOR_LAYOUT = {
+  dpad: { x: 0.10784313827753067, y: 0.4, scale: 0.85 },
+  faceX: { x: 0.8133170008659363, y: 0.4, scale: 1 },
+  faceY: { x: 0.8721405267715454, y: 0.2666666746, scale: 1 },
+  faceA: { x: 0.8721405267715454, y: 0.5333333254, scale: 1 },
+  faceB: { x: 0.9309640526771545, y: 0.4, scale: 1 },
+  r2: { x: 0.93, y: 0.07, scale: 2 },
+  r1: { x: 0.97, y: 0.2222222388, scale: 1 },
+  l1: { x: 0.03, y: 0.2222222388, scale: 1 },
+  l2: { x: 0.07, y: 0.07, scale: 2 },
+  start: { x: 0.538807213306427, y: 0.9111111164093018, scale: 0.85 },
+  select: { x: 0.46078431606292725, y: 0.9111111164093018, scale: 0.85 },
+  leftStick: { x: 0.21568627655506134, y: 0.7333333492279053, scale: 1 },
+  rightStick: { x: 0.7843137383460999, y: 0.7333333492279053, scale: 1 },
+  l3: { x: 0.05, y: 0.7333333492279053, scale: 0.85 },
+  r3: { x: 0.95, y: 0.7333333492279053, scale: 0.85 },
+} as const;
+
+const STICK_RADIUS_FACTOR = 1.0;
 
 function feedback() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
 }
 
-/** Gamepad button: round translucent Material-style chip with a soft press animation. Sends press/release to the injected bridge. */
+/** Generic round gamepad button. */
 function PadButton({
   label,
   icon,
   index,
-  size = 54,
+  size,
   style,
   run,
+  rect,
 }: {
   label: string;
   icon?: IconProp;
   index: number;
-  size?: number;
+  size: number;
   style?: StyleProp<ViewStyle>;
   run: (script: string) => void;
+  rect?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const [pressed, setPressed] = useState(false);
@@ -90,38 +115,43 @@ function PadButton({
     run(`window.__xcpPad.setButton(${index}, false, 0)`);
   }, [index, run, scale]);
 
+  const w = rect ? size * 2.4 : size;
+  const h = rect ? size * 0.9 : size;
+
   return (
     <Pressable onPressIn={pressIn} onPressOut={pressOut} hitSlop={10}>
       <Animated.View
         style={[
           styles.padButton,
-          { width: size, height: size, borderRadius: size / 2, transform: [{ scale }] },
+          { width: w, height: h, borderRadius: rect ? h / 2 : w / 2, transform: [{ scale }] },
           pressed && styles.padButtonPressed,
           style,
         ]}
       >
         {icon ? (
-          <FaIcon icon={icon} size={Math.round(size / 3.4)} color={colors.textPrimary} />
+          <FaIcon icon={icon} size={Math.round(size / 2.6)} color={colors.textPrimary} />
         ) : (
-          <Text style={[styles.padButtonLabel, { fontSize: Math.round(size / 3) }]}>{label}</Text>
+          <Text style={[styles.padButtonLabel, { fontSize: Math.round(size / 2.4) }]}>{label}</Text>
         )}
       </Animated.View>
     </Pressable>
   );
 }
 
-/** Directional D-pad button with a Font Awesome chevron. */
+/** Directional D-pad button. */
 function DpadButton({
   direction,
   icon,
   x,
   y,
+  size,
   run,
 }: {
   direction: 'up' | 'down' | 'left' | 'right';
   icon: IconProp;
   x: number;
   y: number;
+  size: number;
   run: (script: string) => void;
 }) {
   const index = BUTTON_INDICES[direction.toUpperCase() as keyof typeof BUTTON_INDICES];
@@ -147,7 +177,7 @@ function DpadButton({
       onPressIn={pressIn}
       onPressOut={pressOut}
       hitSlop={8}
-      style={[styles.dpadButton, { left: x, top: y }]}
+      style={[styles.dpadButton, { left: x, top: y, width: size, height: size }]}
     >
       <Animated.View
         style={[
@@ -156,41 +186,44 @@ function DpadButton({
           { transform: [{ scale }] },
         ]}
       >
-        <FaIcon
-          icon={icon}
-          size={16}
-          color={active ? colors.onPrimary : colors.textSecondary}
-        />
+        <FaIcon icon={icon} size={Math.round(size / 2.4)} color={active ? colors.onPrimary : colors.textSecondary} />
       </Animated.View>
     </Pressable>
   );
 }
 
-/** Analog stick built with native responder gestures: the knob follows the finger inside the base and reports normalized axis values to the bridge. */
+/** Analog stick. */
 function AnalogStick({
   side,
+  cx,
+  cy,
+  size,
   run,
 }: {
   side: 'left' | 'right';
+  cx: number;
+  cy: number;
+  size: number;
   run: (script: string) => void;
 }) {
-  const axisIndex = side === 'left' ? 0 : 1;
+  const axisX = side === 'left' ? 0 : 2;
+  const axisY = side === 'left' ? 1 : 3;
   const knob = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [active, setActive] = useState(false);
   const granted = useRef(false);
-  const activeRef = useRef(false);
+  const max = size / 2 - size / 5;
 
   const release = useCallback(() => {
     granted.current = false;
-    activeRef.current = false;
     setActive(false);
-    run(`window.__xcpPad.setAxis(${axisIndex}, 0, 0)`);
+    run(`window.__xcpPad.setAxis(${axisX}, 0)`);
+    run(`window.__xcpPad.setAxis(${axisY}, 0)`);
     Animated.spring(knob, {
       toValue: { x: 0, y: 0 },
       speed: 40,
       useNativeDriver: true,
     }).start();
-  }, [axisIndex, knob, run]);
+  }, [axisX, axisY, knob, run]);
 
   const pan = useRef(
     PanResponder.create({
@@ -198,21 +231,20 @@ function AnalogStick({
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         granted.current = true;
-        activeRef.current = true;
         setActive(true);
         feedback();
       },
       onPanResponderMove: (_event: any, gesture: any) => {
         if (!granted.current) return;
         const distance = Math.hypot(gesture.dx, gesture.dy);
-        const max = STICK_RADIUS - KNOB_RADIUS;
         const factor = distance > max ? max / distance : 1;
         const x = gesture.dx * factor;
         const y = gesture.dy * factor;
         knob.setValue({ x, y });
-        const nx = (x / max).toFixed(3);
-        const ny = (y / max).toFixed(3);
-        run(`window.__xcpPad.setAxis(${axisIndex}, ${-Number(ny)}, ${Number(nx)})`);
+        const nx = x / max;
+        const ny = y / max;
+        run(`window.__xcpPad.setAxis(${axisX}, ${Number(nx).toFixed(3)})`);
+        run(`window.__xcpPad.setAxis(${axisY}, ${Number(ny).toFixed(3)})`);
       },
       onPanResponderRelease: release,
       onPanResponderTerminate: release,
@@ -223,15 +255,26 @@ function AnalogStick({
     <View
       style={[
         styles.stickBase,
-        side === 'left' ? { left: 28, bottom: 28 } : { right: 28, bottom: 28 },
+        {
+          left: cx - size / 2,
+          top: cy - size / 2,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        },
         active && styles.stickBaseActive,
       ]}
     >
       <Animated.View
         style={[
           styles.stickKnob,
+          {
+            width: size * 0.45,
+            height: size * 0.45,
+            borderRadius: (size * 0.45) / 2,
+            transform: [{ translateX: knob.x }, { translateY: knob.y }],
+          },
           active && styles.stickKnobActive,
-          { transform: [{ translateX: knob.x }, { translateY: knob.y }] },
         ]}
         {...pan.panHandlers}
       />
@@ -239,61 +282,144 @@ function AnalogStick({
   );
 }
 
-/** On-screen gamepad with a clean anchored layout following Microsoft GDK TAK guidelines:
- * - Upper-left: system buttons (View, Menu)
- * - Lower-center: D-pad / direction controls
- * - Left wheel: left joystick (movement)
- * - Right wheel: face buttons / common actions
- * - Shoulders/triggers on top corners
- */
 export default function TouchControls({ run }: Props) {
-  const { width: screenX, height: screenY } = Dimensions.get('window');
-  const safeArea = Platform.OS === 'android' ? 0 : 40;
-  const baseSize = Math.min(screenX, screenY) * 0.08; // 8% of smaller dimension
+  const { width: W, height: H } = Dimensions.get('window');
+  const U = Math.min(W, H) * U_BASE;
+
+  const pos = (p: { x: number; y: number; scale: number }) => ({
+    cx: p.x * W,
+    cy: p.y * H,
+    size: U * p.scale * 1.6,
+  });
+
+  const dpad = pos(WINLATOR_LAYOUT.dpad);
+  const dpadBtnSize = U * WINLATOR_LAYOUT.dpad.scale * 0.9;
+  const dpadOffset = U * WINLATOR_LAYOUT.dpad.scale * 0.55;
+
+  const leftStick = pos(WINLATOR_LAYOUT.leftStick);
+  const rightStick = pos(WINLATOR_LAYOUT.rightStick);
+  const stickSize = U * WINLATOR_LAYOUT.leftStick.scale * 2.2;
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* Shoulders + triggers – top corners, outside safe area */}
-      <View style={styles.shoulderCluster}>
-        <PadButton label="LB" index={BUTTON_INDICES.LB} size={baseSize * 0.9} run={run} />
-        <PadButton label="LT" index={BUTTON_INDICES.LT} size={baseSize * 0.9} run={run} />
+      {/* Left shoulder L1 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: WINLATOR_LAYOUT.l1.x * W - (U * 1 * 1.2) / 2,
+          top: WINLATOR_LAYOUT.l1.y * H - (U * 1 * 0.5) / 2,
+        }}
+      >
+        <PadButton label="LB" index={BUTTON_INDICES.LB} size={U * 1 * 1.2} run={run} rect />
       </View>
-      <View style={styles.shoulderCluster}>
-        <PadButton label="RB" index={BUTTON_INDICES.RB} size={baseSize * 0.9} run={run} />
-        <PadButton label="RT" index={BUTTON_INDICES.RT} size={baseSize * 0.9} run={run} />
+      {/* Left trigger L2 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: WINLATOR_LAYOUT.l2.x * W - (U * 2 * 1.2) / 2,
+          top: WINLATOR_LAYOUT.l2.y * H - (U * 2 * 0.5) / 2,
+        }}
+      >
+        <PadButton label="LT" index={BUTTON_INDICES.LT} size={U * 2 * 0.7} run={run} rect />
+      </View>
+      {/* Right shoulder R1 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: WINLATOR_LAYOUT.r1.x * W - (U * 1 * 1.2) / 2,
+          top: WINLATOR_LAYOUT.r1.y * H - (U * 1 * 0.5) / 2,
+        }}
+      >
+        <PadButton label="RB" index={BUTTON_INDICES.RB} size={U * 1 * 1.2} run={run} rect />
+      </View>
+      {/* Right trigger R2 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: WINLATOR_LAYOUT.r2.x * W - (U * 2 * 1.2) / 2,
+          top: WINLATOR_LAYOUT.r2.y * H - (U * 2 * 0.5) / 2,
+        }}
+      >
+        <PadButton label="RT" index={BUTTON_INDICES.RT} size={U * 2 * 0.7} run={run} rect />
       </View>
 
-      {/* System buttons – upper-left per TAK guideline */}
-      <View style={styles.systemCluster}>
-        <PadButton label="View" icon={faClone} index={BUTTON_INDICES.VIEW} size={baseSize * 0.8} run={run} />
-        <PadButton label="Menu" icon={faBars} index={BUTTON_INDICES.MENU} size={baseSize * 0.8} run={run} />
-      </View>
+      {/* D-pad */}
+      <DpadButton direction="up" icon={faChevronUp} x={dpad.cx - dpadBtnSize / 2} y={dpad.cy - dpadOffset - dpadBtnSize / 2} size={dpadBtnSize} run={run} />
+      <DpadButton direction="down" icon={faChevronDown} x={dpad.cx - dpadBtnSize / 2} y={dpad.cy + dpadOffset - dpadBtnSize / 2} size={dpadBtnSize} run={run} />
+      <DpadButton direction="left" icon={faChevronLeft} x={dpad.cx - dpadOffset - dpadBtnSize / 2} y={dpad.cy - dpadBtnSize / 2} size={dpadBtnSize} run={run} />
+      <DpadButton direction="right" icon={faChevronRight} x={dpad.cx + dpadOffset - dpadBtnSize / 2} y={dpad.cy - dpadBtnSize / 2} size={dpadBtnSize} run={run} />
 
-      {/* Left stick – movement wheel (left side) */}
-      <AnalogStick side="left" run={run} />
+      {/* Left stick */}
+      <AnalogStick side="left" cx={leftStick.cx} cy={leftStick.cy} size={stickSize} run={run} />
+      {/* Right stick */}
+      <AnalogStick side="right" cx={rightStick.cx} cy={rightStick.cy} size={stickSize} run={run} />
 
-      {/* D-pad – lower center zone */}
-      <View style={styles.dpadCluster}>
-        <DpadButton direction="up" icon={faChevronUp} x={baseSize / 2} y={0} run={run} />
-        <DpadButton direction="left" icon={faChevronLeft} x={0} y={baseSize / 2 + 4} run={run} />
-        <DpadButton direction="right" icon={faChevronRight} x={baseSize / 2 + 4} y={baseSize / 2 + 4} run={run} />
-        <DpadButton direction="down" icon={faChevronDown} x={baseSize / 2} y={baseSize + 8} run={run} />
-      </View>
+      {/* Face buttons */}
+      {(() => {
+        const f = (p: { x: number; y: number; scale: number }) => ({
+          cx: p.x * W,
+          cy: p.y * H,
+          size: U * p.scale * 1.5,
+        });
+        const xBtn = f(WINLATOR_LAYOUT.faceX);
+        const yBtn = f(WINLATOR_LAYOUT.faceY);
+        const aBtn = f(WINLATOR_LAYOUT.faceA);
+        const bBtn = f(WINLATOR_LAYOUT.faceB);
+        return (
+          <>
+            <View style={{ position: 'absolute', left: xBtn.cx - xBtn.size / 2, top: xBtn.cy - xBtn.size / 2 }}>
+              <PadButton label="X" index={BUTTON_INDICES.X} size={xBtn.size} run={run} />
+            </View>
+            <View style={{ position: 'absolute', left: yBtn.cx - yBtn.size / 2, top: yBtn.cy - yBtn.size / 2 }}>
+              <PadButton label="Y" index={BUTTON_INDICES.Y} size={yBtn.size} run={run} />
+            </View>
+            <View style={{ position: 'absolute', left: aBtn.cx - aBtn.size / 2, top: aBtn.cy - aBtn.size / 2 }}>
+              <PadButton label="A" index={BUTTON_INDICES.A} size={aBtn.size} run={run} />
+            </View>
+            <View style={{ position: 'absolute', left: bBtn.cx - bBtn.size / 2, top: bBtn.cy - bBtn.size / 2 }}>
+              <PadButton label="B" index={BUTTON_INDICES.B} size={bBtn.size} run={run} />
+            </View>
+          </>
+        );
+      })()}
 
-      {/* Face buttons + right stick – right wheel */}
-      <View style={styles.faceCluster}>
-        <View style={styles.faceRow}>
-          <PadButton label="Y" index={BUTTON_INDICES.Y} run={run} />
-        </View>
-        <View style={styles.faceRow}>
-          <PadButton label="X" index={BUTTON_INDICES.X} run={run} />
-          <PadButton label="B" index={BUTTON_INDICES.B} run={run} />
-        </View>
-        <View style={styles.faceRow}>
-          <PadButton label="A" index={BUTTON_INDICES.A} run={run} />
-        </View>
-      </View>
-      <AnalogStick side="right" run={run} />
+      {/* Start / Select */}
+      {(() => {
+        const s = (p: { x: number; y: number; scale: number }) => ({
+          cx: p.x * W,
+          cy: p.y * H,
+          size: U * p.scale * 1.3,
+        });
+        const start = s(WINLATOR_LAYOUT.start);
+        const select = s(WINLATOR_LAYOUT.select);
+        return (
+          <>
+            <View style={{ position: 'absolute', left: start.cx - start.size / 2, top: start.cy - start.size / 2 }}>
+              <PadButton label="Start" index={BUTTON_INDICES.MENU} size={start.size} run={run} rect />
+            </View>
+            <View style={{ position: 'absolute', left: select.cx - select.size / 2, top: select.cy - select.size / 2 }}>
+              <PadButton label="Select" index={BUTTON_INDICES.VIEW} size={select.size} run={run} rect />
+            </View>
+          </>
+        );
+      })()}
+
+      {/* L3 / R3 */}
+      {(() => {
+        const l3 = pos(WINLATOR_LAYOUT.l3);
+        const r3 = pos(WINLATOR_LAYOUT.r3);
+        const sz = U * 0.85 * 1.2;
+        return (
+          <>
+            <View style={{ position: 'absolute', left: l3.cx - sz / 2, top: l3.cy - sz / 2 }}>
+              <PadButton label="L3" index={BUTTON_INDICES.L3} size={sz} run={run} />
+            </View>
+            <View style={{ position: 'absolute', left: r3.cx - sz / 2, top: r3.cy - sz / 2 }}>
+              <PadButton label="R3" index={BUTTON_INDICES.R3} size={sz} run={run} />
+            </View>
+          </>
+        );
+      })()}
     </View>
   );
 }
@@ -307,20 +433,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 90,
     elevation: 90,
-  },
-  shoulderCluster: {
-    position: 'absolute',
-    top: 18,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  systemCluster: {
-    position: 'absolute',
-    top: 18,
-    left: '50%',
-    transform: [{ translateX: -50 }],
-    flexDirection: 'row',
-    gap: 12,
   },
   padButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
@@ -337,18 +449,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '700',
   },
-  dpadCluster: {
-    position: 'absolute',
-    bottom: '12%',
-    left: '50%',
-    transform: [{ translateX: -24 }],
-    width: 132,
-    height: 132,
-  },
   dpadButton: {
     position: 'absolute',
-    width: 44,
-    height: 44,
   },
   dpadButtonInner: {
     width: '100%',
@@ -364,22 +466,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderColor: colors.accent,
   },
-  faceCluster: {
-    position: 'absolute',
-    bottom: '8%',
-    right: 28,
-    alignItems: 'center',
-  },
-  faceRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginVertical: 3,
-  },
   stickBase: {
     position: 'absolute',
-    width: STICK_RADIUS * 2,
-    height: STICK_RADIUS * 2,
-    borderRadius: STICK_RADIUS,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.18)',
@@ -391,9 +479,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(29, 184, 101, 0.10)',
   },
   stickKnob: {
-    width: KNOB_RADIUS * 2,
-    height: KNOB_RADIUS * 2,
-    borderRadius: KNOB_RADIUS,
     backgroundColor: 'rgba(255, 255, 255, 0.22)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.35)',

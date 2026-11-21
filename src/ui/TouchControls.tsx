@@ -3,6 +3,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -52,16 +53,11 @@ const BUTTON_INDICES = {
 const STICK_RADIUS = 62;
 const KNOB_RADIUS = 30;
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 function feedback() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
 }
 
-/**
- * Gamepad button: round translucent Material-style chip with a soft press
- * animation. Sends press/release to the injected bridge.
- */
+/** Gamepad button: round translucent Material-style chip with a soft press animation. Sends press/release to the injected bridge. */
 function PadButton({
   label,
   icon,
@@ -170,10 +166,7 @@ function DpadButton({
   );
 }
 
-/**
- * Analog stick built with native responder gestures: the knob follows the
- * finger inside the base and reports normalized axis values to the bridge.
- */
+/** Analog stick built with native responder gestures: the knob follows the finger inside the base and reports normalized axis values to the bridge. */
 function AnalogStick({
   side,
   run,
@@ -209,7 +202,7 @@ function AnalogStick({
         setActive(true);
         feedback();
       },
-      onPanResponderMove: (_event, gesture) => {
+      onPanResponderMove: (_event: any, gesture: any) => {
         if (!granted.current) return;
         const distance = Math.hypot(gesture.dx, gesture.dy);
         const max = STICK_RADIUS - KNOB_RADIUS;
@@ -246,41 +239,49 @@ function AnalogStick({
   );
 }
 
-/**
- * On-screen gamepad with a clean anchored layout:
- * left stick + D-pad on the left, face buttons + right stick on the right,
- * shoulders/triggers on the top corners and system buttons top-center.
+/** On-screen gamepad with a clean anchored layout following Microsoft GDK TAK guidelines:
+ * - Upper-left: system buttons (View, Menu)
+ * - Lower-center: D-pad / direction controls
+ * - Left wheel: left joystick (movement)
+ * - Right wheel: face buttons / common actions
+ * - Shoulders/triggers on top corners
  */
 export default function TouchControls({ run }: Props) {
+  const { width: screenX, height: screenY } = Dimensions.get('window');
+  const safeArea = Platform.OS === 'android' ? 0 : 40;
+  const baseSize = Math.min(screenX, screenY) * 0.08; // 8% of smaller dimension
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* Shoulders + triggers */}
-      <View style={[styles.shoulderCluster, { left: 18 }]}>
-        <PadButton label="LB" index={BUTTON_INDICES.LB} size={46} run={run} />
-        <PadButton label="LT" index={BUTTON_INDICES.LT} size={46} run={run} />
+      {/* Shoulders + triggers – top corners, outside safe area */}
+      <View style={styles.shoulderCluster}>
+        <PadButton label="LB" index={BUTTON_INDICES.LB} size={baseSize * 0.9} run={run} />
+        <PadButton label="LT" index={BUTTON_INDICES.LT} size={baseSize * 0.9} run={run} />
       </View>
-      <View style={[styles.shoulderCluster, { right: 18 }]}>
-        <PadButton label="RB" index={BUTTON_INDICES.RB} size={46} run={run} />
-        <PadButton label="RT" index={BUTTON_INDICES.RT} size={46} run={run} />
+      <View style={styles.shoulderCluster}>
+        <PadButton label="RB" index={BUTTON_INDICES.RB} size={baseSize * 0.9} run={run} />
+        <PadButton label="RT" index={BUTTON_INDICES.RT} size={baseSize * 0.9} run={run} />
       </View>
 
-      {/* System buttons, top center */}
+      {/* System buttons – upper-left per TAK guideline */}
       <View style={styles.systemCluster}>
-        <PadButton label="View" icon={faClone} index={BUTTON_INDICES.VIEW} size={40} run={run} />
-        <PadButton label="Menu" icon={faBars} index={BUTTON_INDICES.MENU} size={40} run={run} />
+        <PadButton label="View" icon={faClone} index={BUTTON_INDICES.VIEW} size={baseSize * 0.8} run={run} />
+        <PadButton label="Menu" icon={faBars} index={BUTTON_INDICES.MENU} size={baseSize * 0.8} run={run} />
       </View>
 
-      {/* Left stick + D-pad */}
+      {/* Left stick – movement wheel (left side) */}
       <AnalogStick side="left" run={run} />
-      <View style={[styles.dpadCluster, { left: 28 + STICK_RADIUS * 2 + 26 }]}>
-        <DpadButton direction="up" icon={faChevronUp} x={44} y={0} run={run} />
-        <DpadButton direction="left" icon={faChevronLeft} x={0} y={44} run={run} />
-        <DpadButton direction="right" icon={faChevronRight} x={88} y={44} run={run} />
-        <DpadButton direction="down" icon={faChevronDown} x={44} y={88} run={run} />
+
+      {/* D-pad – lower center zone */}
+      <View style={styles.dpadCluster}>
+        <DpadButton direction="up" icon={faChevronUp} x={baseSize / 2} y={0} run={run} />
+        <DpadButton direction="left" icon={faChevronLeft} x={0} y={baseSize / 2 + 4} run={run} />
+        <DpadButton direction="right" icon={faChevronRight} x={baseSize / 2 + 4} y={baseSize / 2 + 4} run={run} />
+        <DpadButton direction="down" icon={faChevronDown} x={baseSize / 2} y={baseSize + 8} run={run} />
       </View>
 
-      {/* Face buttons (Xbox diamond) + right stick */}
-      <View style={[styles.faceCluster, { right: 28 + STICK_RADIUS * 2 + 26 }]}>
+      {/* Face buttons + right stick – right wheel */}
+      <View style={styles.faceCluster}>
         <View style={styles.faceRow}>
           <PadButton label="Y" index={BUTTON_INDICES.Y} run={run} />
         </View>
@@ -316,7 +317,8 @@ const styles = StyleSheet.create({
   systemCluster: {
     position: 'absolute',
     top: 18,
-    left: SCREEN_W / 2 - 50,
+    left: '50%',
+    transform: [{ translateX: -50 }],
     flexDirection: 'row',
     gap: 12,
   },
@@ -337,7 +339,9 @@ const styles = StyleSheet.create({
   },
   dpadCluster: {
     position: 'absolute',
-    bottom: 72,
+    bottom: '12%',
+    left: '50%',
+    transform: [{ translateX: -24 }],
     width: 132,
     height: 132,
   },
@@ -362,8 +366,8 @@ const styles = StyleSheet.create({
   },
   faceCluster: {
     position: 'absolute',
-    bottom: 40,
-    width: 172,
+    bottom: '8%',
+    right: 28,
     alignItems: 'center',
   },
   faceRow: {

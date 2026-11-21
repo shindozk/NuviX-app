@@ -72,6 +72,9 @@ const clamp = (value: number, min: number, max: number) =>
  */
 export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
   const [open, setOpen] = useState(false);
+  // Real height of the options sheet, measured on first layout so that the
+  // closed state can hide it completely.
+  const [sheetHeight, setSheetHeight] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
   const position = useRef(
     new Animated.ValueXY({
@@ -238,7 +241,7 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
 
   const sheetTranslate = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [-320, 0],
+    outputRange: [-(sheetHeight || 420), 0],
   });
   const backdropOpacity = progress.interpolate({
     inputRange: [0, 1],
@@ -274,6 +277,10 @@ export default function FloatingMenu({ onAction, touchControlsOn }: Props) {
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: sheetTranslate }] }]}
         pointerEvents={open ? 'auto' : 'none'}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          if (height > 0 && height !== sheetHeight) setSheetHeight(height);
+        }}
       >
         <View style={styles.sheetCard}>
           <View style={styles.sheetHeader}>
@@ -414,6 +421,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    zIndex: 2,
+    elevation: 2,
   },
   sheetCard: {
     width: '100%',

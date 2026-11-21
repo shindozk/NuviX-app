@@ -84,7 +84,7 @@ export function useSettings() {
       .then((raw) => {
         if (!active || !isMounted.current) return;
         try {
-          const parsed = JSON.parse(raw) as Partial<Settings>;
+          const parsed = JSON.parse(raw ?? '{}') as Partial<Settings>;
           setSettings((prev) => ({ ...prev, ...parsed }));
         } catch {
           // Invalid JSON, use defaults

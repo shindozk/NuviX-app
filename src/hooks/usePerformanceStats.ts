@@ -22,10 +22,10 @@ export function usePerformanceStats(options?: UsePerformanceStatsOptions) {
     temperature: 0,
   });
   const [visible, setVisible] = useState(false);
-  const animationFrame = useRef<number>();
+  const animationFrame = useRef<number | undefined>(undefined);
   const frameCount = useRef(0);
   const lastTime = useRef<number>(Date.now());
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     if (!enabled) return;

@@ -2,12 +2,14 @@
   "expo": {
     "name": "NuviX",
     "slug": "nuvi-x",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070A08",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": true,
@@ -24,10 +26,10 @@
     },
     "android": {
       "package": "com.nuvix.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "userInterfaceStyle": "dark",
       "adaptiveIcon": {
-        "backgroundColor": "#070A08",
+        "backgroundColor": "#2B2C31",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },

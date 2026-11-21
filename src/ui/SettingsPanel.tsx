@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
   Dimensions,
+  Easing,
 } from 'react-native';
 
 import { colors, radius, duration, easing } from '../theme';
@@ -134,7 +135,7 @@ export default function SettingsPanel({
                   value={settings.customUserAgent}
                   onChangeText={(value) => onChange({ customUserAgent: value })}
                   placeholder={strings.customUaPlaceholder}
-                  placeholderTextColor={colors.textDim}
+                  placeholderTextColor={colors.textTertiary}
                   style={styles.input}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -274,7 +275,7 @@ function ToggleRow({ label, value, onValueChange }: ToggleRowProps) {
         value={value}
         onValueChange={onValueChange}
         trackColor={{ false: colors.border, true: colors.accent }}
-        thumbColor={value ? colors.accentBright : colors.textDim}
+        thumbColor={value ? colors.accentBright : colors.textTertiary}
       />
     </View>
   );

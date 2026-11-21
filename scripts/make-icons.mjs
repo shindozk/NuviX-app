@@ -5,115 +5,165 @@ import sharp from 'sharp';
 const root = resolve(import.meta.dirname, '..');
 
 /**
- * NuviX Logo - Cloud with Xbox X
- * A modern, cloud-shaped design with a stylized X for Xbox gaming
+ * NuviX logo source.
+ *
+ * assets/android-icon_logo.png is the master artwork (Xbox sphere + clouds on a
+ * dark rounded square). Every launcher icon, splash image and favicon is
+ * derived from it, so replacing that single file updates the whole app.
  */
-function artwork(scale, monochrome = false) {
-  const size = 1024;
-  const primary = monochrome ? '#FFFFFF' : '#1DB865';
-  const cloud = monochrome ? '#FFFFFF' : '#2BE31F';
-  const shadow = monochrome ? '#FFFFFF' : '#0A6B0A';
+const SOURCE = resolve(root, 'assets', 'android-icon_logo.png');
 
-  // Cloud shape with X overlay
-  const art = `
-    <defs>
-      <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#2BE31F"/>
-        <stop offset="1" stop-color="#0A6B0A"/>
-      </linearGradient>
-      <linearGradient id="xGrad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#FFFFFF"/>
-        <stop offset="1" stop-color="#DFFFDA"/>
-      </linearGradient>
-      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="16" result="blur"/>
-        <feMerge>
-          <feMergeNode in="blur"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-    <g transform="translate(${512 - 512 * scale} ${512 - 512 * scale}) scale(${scale})">
-      ${monochrome ? '' : 'filter="url(#glow)"'}
-      <g>
-        <!-- Cloud shape -->
-        <path fill="${cloud}" d="
-          M 278 690
-          a 150 150 0 0 1 6 -298
-          a 196 196 0 0 1 358 -78
-          a 168 168 0 0 1 130 160
-          a 132 132 0 0 1 -24 216
-          Z"/>
-        <!-- X symbol -->
-        <g fill="${primary}">
-          <rect x="478" y="342" width="68" height="356" rx="34" transform="rotate(45 512 520)"/>
-          <rect x="478" y="342" width="68" height="356" rx="34" transform="rotate(-45 512 520)"/>
-        </g>
-        <!-- Sparkles effect -->
-        <g fill="${primary}" opacity="0.6">
-          <circle cx="420" cy="420" r="4"/>
-          <circle cx="600" cy="420" r="4"/>
-          <circle cx="512" cy="480" r="4"/>
-        </g>
-      </g>
-    </g>
-  `;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${art}</svg>`;
+// The master artwork is a rounded square on a white page. Scaling it up and
+// cropping the centre back to 1024 removes the white corners and leaves the
+// dark background bleeding to every edge, which is what adaptive icons need.
+const BLEED_SIZE = 1024;
+const UPSCALE = 1.15;
+
+async function bleedingArtwork() {
+  const scaled = Math.round(BLEED_SIZE * UPSCALE);
+  const resized = await sharp(SOURCE)
+    .resize(scaled, scaled, { fit: 'cover' })
+    .toBuffer();
+  const inset = Math.round((scaled - BLEED_SIZE) / 2);
+  return sharp(resized)
+    .extract({ left: inset, top: inset, width: BLEED_SIZE, height: BLEED_SIZE })
+    .toBuffer();
 }
 
+/**
+ * Themed (monochrome) icon: bright artwork becomes white, dark background and
+ * the dark X cut-out become transparent, so the system tint shows through.
+ */
+async function monochromeArtwork(artwork) {
+  const { data, info } = await sharp(artwork)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const out = Buffer.alloc(BLEED_SIZE * BLEED_SIZE * 4);
+
+  for (let i = 0, o = 0; i < data.length; i += info.channels, o += 4) {
+    const luminance =
+      0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const alpha = Math.max(0, Math.min(1, (luminance - 70) / 60));
+    out[o] = 255;
+    out[o + 1] = 255;
+    out[o + 2] = 255;
+    out[o + 3] = Math.round(alpha * 255);
+  }
+
+  return sharp(out, {
+    raw: { width: BLEED_SIZE, height: BLEED_SIZE, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+}
+
+// Adaptive icons draw the foreground on a 108dp canvas but only the middle
+// 72dp (66.7%) is guaranteed visible, so the artwork is rendered at 70% of the
+// canvas and centred with transparent padding. Rendering it at 100% makes the
+// launcher icon look zoomed in and the mask clips the corners.
+const FOREGROUND_SCALE = 0.7;
+
+/** Average colour of the artwork's four corners: the backdrop the shrunken
+ *  artwork fades into, so no square edge is visible in the launcher icon. */
+async function cornerColour(source) {
+  const { data, info } = await sharp(source)
+    .resize(8, 8, { fit: 'cover' })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const channels = info.channels;
+  const corners = [0, 7, 56, 63];
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  for (const index of corners) {
+    r += data[index * channels];
+    g += data[index * channels + 1];
+    b += data[index * channels + 2];
+  }
+  return {
+    r: Math.round(r / corners.length),
+    g: Math.round(g / corners.length),
+    b: Math.round(b / corners.length),
+    alpha: 1,
+  };
+}
+
+/**
+ * Places the artwork centred on a canvas of `background` at `scale`, with the
+ * artwork's own edges feathered into the background. The flat square edge and
+ * the artwork's lighter border would otherwise show as a frame.
+ */
+async function paddedArtwork(source, scale, background) {
+  const inner = Math.round(BLEED_SIZE * scale);
+  const offset = Math.round((BLEED_SIZE - inner) / 2);
+  const feather = Math.max(1, Math.round(inner * 0.12));
+  const { data, info } = await sharp(source)
+    .resize(inner, inner, { fit: 'cover' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const smooth = (t) => {
+    const c = Math.max(0, Math.min(1, t));
+    return c * c * (3 - 2 * c);
+  };
+
+  for (let y = 0; y < inner; y += 1) {
+    const fy = smooth(Math.min(y, inner - 1 - y) / feather);
+    for (let x = 0; x < inner; x += 1) {
+      const fx = smooth(Math.min(x, inner - 1 - x) / feather);
+      const index = (y * inner + x) * info.channels + 3;
+      data[index] = Math.round(data[index] * fx * fy);
+    }
+  }
+
+  const feathered = await sharp(data, {
+    raw: { width: inner, height: inner, channels: info.channels },
+  })
+    .png()
+    .toBuffer();
+
+  return sharp({
+    create: {
+      width: BLEED_SIZE,
+      height: BLEED_SIZE,
+      channels: 4,
+      background,
+    },
+  })
+    .composite([{ input: feathered, top: offset, left: offset }])
+    .png()
+    .toBuffer();
+}
+
+const artwork = await bleedingArtwork();
+const backdrop = await cornerColour(artwork);
+const foreground = await paddedArtwork(artwork, FOREGROUND_SCALE, backdrop);
+const hex = (value) => value.toString(16).padStart(2, '0').toUpperCase();
+console.log(
+  `   backdrop: #${hex(backdrop.r)}${hex(backdrop.g)}${hex(backdrop.b)} — keep android.adaptiveIcon.backgroundColor in sync`
+);
+const monochrome = await monochromeArtwork(foreground);
+
 const files = [
-  { name: 'icon.png', size: 1024, background: '#070A08', scale: 0.82 },
-  { name: 'android-icon-foreground.png', size: 1024, background: null, scale: 0.62 },
-  { name: 'android-icon-background.png', size: 1024, background: '#070A08', scale: 0, solid: true },
-  { name: 'android-icon-monochrome.png', size: 1024, background: null, scale: 0.62, monochrome: true },
-  { name: 'splash-icon.png', size: 512, background: null, scale: 0.92 },
-  { name: 'favicon.png', size: 48, background: '#070A08', scale: 0.82 },
+  { name: 'icon.png', size: 1024, source: artwork },
+  { name: 'android-icon-foreground.png', size: 1024, source: foreground },
+  { name: 'android-icon-monochrome.png', size: 1024, source: monochrome },
+  { name: 'splash-icon.png', size: 512, source: artwork },
+  { name: 'favicon.png', size: 48, source: artwork },
 ];
 
 console.log('NuviX Icon Generator\n');
-console.log('Generating icons...\n');
+console.log('Generating icons from assets/android-icon_logo.png...\n');
 
 for (const file of files) {
   const path = resolve(root, 'assets', file.name);
   await mkdir(dirname(path), { recursive: true });
-
-  if (file.solid) {
-    const solid = await sharp({
-      create: {
-        width: file.size,
-        height: file.size,
-        channels: 4,
-        background: file.background,
-      },
-    })
-      .png()
-      .toBuffer();
-    await writeFile(path, solid);
-    console.log(`✓ wrote assets/${file.name} (solid background)`);
-    continue;
-  }
-
-  const png = await sharp(Buffer.from(artwork(file.scale, file.monochrome)))
-    .resize(file.size, file.size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  const png = await sharp(file.source)
+    .resize(file.size, file.size, { fit: 'contain' })
     .png()
     .toBuffer();
-
-  if (file.background) {
-    const composed = await sharp({
-      create: {
-        width: file.size,
-        height: file.size,
-        channels: 4,
-        background: file.background,
-      },
-    })
-      .composite([{ input: png }])
-      .png()
-      .toBuffer();
-    await writeFile(path, composed);
-  } else {
-    await writeFile(path, png);
-  }
+  await writeFile(path, png);
   console.log(`✓ wrote assets/${file.name}`);
 }
 

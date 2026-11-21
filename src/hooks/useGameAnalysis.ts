@@ -25,11 +25,13 @@ export function useGameAnalysis() {
     active: false,
   });
   const [history, setHistory] = useState<GameHistory[]>([]);
-  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const appState = useRef<AppStateStatus | null>(
+    (AppState.currentState as AppStateStatus | undefined) ?? null
+  );
 
   useEffect(() => {
     const handleAppState = (nextAppState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      if (appState.current?.match(/inactive|background/) && nextAppState === 'active') {
         // App returned to foreground
         setSession((prev) => ({
           ...prev,
@@ -46,8 +48,17 @@ export function useGameAnalysis() {
           };
 
           // Add to history if session was active long enough (> 5 minutes)
-          if (newSession.startTime > 0 && newSession.endTime - newSession.startTime > 300000) {
-            setHistory((h) => [newSession, ...h].slice(0, 50));
+          const endTime = newSession.endTime ?? Date.now();
+          if (newSession.startTime > 0 && endTime - newSession.startTime > 300000) {
+            const entry: GameHistory = {
+              id: String(newSession.startTime),
+              gameName: newSession.games.join(', '),
+              startTime: newSession.startTime,
+              endTime,
+              duration: endTime - newSession.startTime,
+              quality: 'auto',
+            };
+            setHistory((h) => [entry, ...h].slice(0, 50));
           }
 
           return {
@@ -68,7 +79,7 @@ export function useGameAnalysis() {
       setSession((prev) => ({ ...prev, startTime: Date.now(), active: true }));
     }
 
-    return () => subscription removal();
+    return () => subscription.remove();
   }, [session.startTime]);
 
   const addGame = (gameName: string) => {

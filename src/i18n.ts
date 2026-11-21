@@ -262,9 +262,9 @@ const fr = {
   uaCustom: 'Personnalisé',
   customUa: 'User-Agent personnalisé',
   customUaPlaceholder: 'Collez un User-Agent ici',
-  zoom: 'Zoom de l'interface',
+  zoom: 'Zoom de l\'interface',
   behavior: 'Comportement',
-  keepAwake: 'Garder l'écran allumé',
+  keepAwake: 'Garder l\'écran allumé',
   touchControlsToggle: 'Afficher les contrôles à l écran',
   account: 'Compte',
   signInHint: 'Connectez-vous avec votre compte Microsoft sur le site Xbox.',
@@ -826,7 +826,7 @@ const tr = {
   confirm: 'Tamam',
   version: 'Sürüm',
   notOfficial: 'Resmi olmayan uygulama. Xbox Game Pass Ultimate gerekir.',
-  previewNotice: 'Web önizleme: Android'de bu uygulama play.xbox.com açar.',
+  previewNotice: 'Web önizleme: Android\'de bu uygulama play.xbox.com açar.',
   previewTitle: 'Senkronize akış',
   previewBadge: 'NUVI X',
   padHint: 'Sanal kontrolör aktif',
@@ -952,6 +952,3 @@ const languages: Record<string, Strings> = {
 };
 
 export const strings: Strings = languages[detectLanguage()] || en;
-
-export { SUPPORTED_LANGUAGES };
-export type { LanguageCode };

@@ -177,8 +177,8 @@ function AnalogStick({ x, y, run, axisIndex }: AnalogStickProps) {
               transform: [
                 { translateX: stickAnim.x },
                 { translateY: stickAnim.y },
+                { scale: stickScale },
               ],
-              scale: stickScale,
             },
           ]}
         />

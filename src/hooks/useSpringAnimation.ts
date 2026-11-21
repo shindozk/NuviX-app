@@ -40,7 +40,6 @@ export function useSpringAnimation(
       }),
       Animated.spring(scale, {
         toValue: 1,
-        toValue: 1,
         useNativeDriver: true,
       }),
     ]).start();

@@ -4,6 +4,9 @@ This directory contains the app's assets.
 
 ## Required Files (generate using `npm run generate:icons`)
 
+All icons are derived from `android-icon_logo.png` (the master artwork), so
+replacing that one file and running the command updates the whole app.
+
 - `icon.png` - Main app icon (1024x1024px recommended)
 - `android-icon-foreground.png` - Android foreground icon
 - `android-icon-background.png` - Android background icon
@@ -23,4 +26,4 @@ Run the following command to generate all required icons:
 npm run generate:icons
 ```
 
-This will create all icons from the SVG template with proper sizing and backgrounds.
+This will create all icons from `android-icon_logo.png` with proper sizing and backgrounds.

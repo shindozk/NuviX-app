@@ -45,8 +45,10 @@ function Root() {
     };
   }, [settings.keepAwake]);
 
-  // Force app into fullscreen mode on start
+  // Force app into fullscreen mode on start (browser only)
   React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
     const requestFullscreen = () => {
       const doc = document as any;
       if (doc.documentElement) {

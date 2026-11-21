@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { colors, type Settings } from '../settings';
-
 const THEME_KEY = 'xcloud-play:theme';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-export function useTheme(theme: Settings['theme']) {
+export function useTheme(theme: ThemeMode) {
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
   const systemTheme = useColorScheme();
 

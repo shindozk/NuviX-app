@@ -55,7 +55,7 @@ const BUTTON_INDICES = {
 
 // Winlator "Virtual Gamepad" profile (controls-3.icp) normalized layout.
 // Coordinates are fractions of screen width/height (0..1); scale multiplies U.
-const U_BASE = 0.065;
+const U_BASE = 0.075;
 const WINLATOR_LAYOUT = {
   dpad: { x: 0.10784313827753067, y: 0.4, scale: 0.85 },
   faceX: { x: 0.8133170008659363, y: 0.4, scale: 1 },
@@ -289,16 +289,16 @@ export default function TouchControls({ run }: Props) {
   const pos = (p: { x: number; y: number; scale: number }) => ({
     cx: p.x * W,
     cy: p.y * H,
-    size: U * p.scale * 1.6,
+    size: U * p.scale * 1.9,
   });
 
   const dpad = pos(WINLATOR_LAYOUT.dpad);
-  const dpadBtnSize = U * WINLATOR_LAYOUT.dpad.scale * 0.9;
-  const dpadOffset = U * WINLATOR_LAYOUT.dpad.scale * 0.55;
+  const dpadBtnSize = U * WINLATOR_LAYOUT.dpad.scale * 1.1;
+  const dpadOffset = U * WINLATOR_LAYOUT.dpad.scale * 0.62;
 
   const leftStick = pos(WINLATOR_LAYOUT.leftStick);
   const rightStick = pos(WINLATOR_LAYOUT.rightStick);
-  const stickSize = U * WINLATOR_LAYOUT.leftStick.scale * 2.2;
+  const stickSize = U * WINLATOR_LAYOUT.leftStick.scale * 2.6;
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
@@ -306,41 +306,41 @@ export default function TouchControls({ run }: Props) {
       <View
         style={{
           position: 'absolute',
-          left: WINLATOR_LAYOUT.l1.x * W - (U * 1 * 1.2) / 2,
-          top: WINLATOR_LAYOUT.l1.y * H - (U * 1 * 0.5) / 2,
+          left: WINLATOR_LAYOUT.l1.x * W - (U * 1 * 1.4 * 2.4) / 2,
+          top: WINLATOR_LAYOUT.l1.y * H - (U * 1 * 1.4 * 0.9) / 2,
         }}
       >
-        <PadButton label="LB" index={BUTTON_INDICES.LB} size={U * 1 * 1.2} run={run} rect />
+        <PadButton label="LB" index={BUTTON_INDICES.LB} size={U * 1 * 1.4} run={run} rect />
       </View>
       {/* Left trigger L2 */}
       <View
         style={{
           position: 'absolute',
-          left: WINLATOR_LAYOUT.l2.x * W - (U * 2 * 1.2) / 2,
-          top: WINLATOR_LAYOUT.l2.y * H - (U * 2 * 0.5) / 2,
+          left: WINLATOR_LAYOUT.l2.x * W - (U * 2 * 0.85 * 2.4) / 2,
+          top: WINLATOR_LAYOUT.l2.y * H - (U * 2 * 0.85 * 0.9) / 2,
         }}
       >
-        <PadButton label="LT" index={BUTTON_INDICES.LT} size={U * 2 * 0.7} run={run} rect />
+        <PadButton label="LT" index={BUTTON_INDICES.LT} size={U * 2 * 0.85} run={run} rect />
       </View>
       {/* Right shoulder R1 */}
       <View
         style={{
           position: 'absolute',
-          left: WINLATOR_LAYOUT.r1.x * W - (U * 1 * 1.2) / 2,
-          top: WINLATOR_LAYOUT.r1.y * H - (U * 1 * 0.5) / 2,
+          left: WINLATOR_LAYOUT.r1.x * W - (U * 1 * 1.4 * 2.4) / 2,
+          top: WINLATOR_LAYOUT.r1.y * H - (U * 1 * 1.4 * 0.9) / 2,
         }}
       >
-        <PadButton label="RB" index={BUTTON_INDICES.RB} size={U * 1 * 1.2} run={run} rect />
+        <PadButton label="RB" index={BUTTON_INDICES.RB} size={U * 1 * 1.4} run={run} rect />
       </View>
       {/* Right trigger R2 */}
       <View
         style={{
           position: 'absolute',
-          left: WINLATOR_LAYOUT.r2.x * W - (U * 2 * 1.2) / 2,
-          top: WINLATOR_LAYOUT.r2.y * H - (U * 2 * 0.5) / 2,
+          left: WINLATOR_LAYOUT.r2.x * W - (U * 2 * 0.85 * 2.4) / 2,
+          top: WINLATOR_LAYOUT.r2.y * H - (U * 2 * 0.85 * 0.9) / 2,
         }}
       >
-        <PadButton label="RT" index={BUTTON_INDICES.RT} size={U * 2 * 0.7} run={run} rect />
+        <PadButton label="RT" index={BUTTON_INDICES.RT} size={U * 2 * 0.85} run={run} rect />
       </View>
 
       {/* D-pad */}
@@ -359,7 +359,7 @@ export default function TouchControls({ run }: Props) {
         const f = (p: { x: number; y: number; scale: number }) => ({
           cx: p.x * W,
           cy: p.y * H,
-          size: U * p.scale * 1.5,
+          size: U * p.scale * 1.8,
         });
         const xBtn = f(WINLATOR_LAYOUT.faceX);
         const yBtn = f(WINLATOR_LAYOUT.faceY);
@@ -388,7 +388,7 @@ export default function TouchControls({ run }: Props) {
         const s = (p: { x: number; y: number; scale: number }) => ({
           cx: p.x * W,
           cy: p.y * H,
-          size: U * p.scale * 1.3,
+          size: U * p.scale * 1.6,
         });
         const start = s(WINLATOR_LAYOUT.start);
         const select = s(WINLATOR_LAYOUT.select);
@@ -408,7 +408,7 @@ export default function TouchControls({ run }: Props) {
       {(() => {
         const l3 = pos(WINLATOR_LAYOUT.l3);
         const r3 = pos(WINLATOR_LAYOUT.r3);
-        const sz = U * 0.85 * 1.2;
+        const sz = U * 0.85 * 1.5;
         return (
           <>
             <View style={{ position: 'absolute', left: l3.cx - sz / 2, top: l3.cy - sz / 2 }}>

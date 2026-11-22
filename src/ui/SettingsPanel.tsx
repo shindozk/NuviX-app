@@ -16,8 +16,9 @@ import { alpha, colors, spacing, typeScale } from '../theme';
 import { ZOOM_OPTIONS, type Settings, type UserAgentMode } from '../settings';
 import { strings } from '../i18n';
 import { Button, ChipRow, Divider, ListRow, M3Switch, SectionHeader, Segmented, TextField } from './m3';
-import SidePanel from './SidePanel';
+import BottomSheet from './BottomSheet';
 import { playUiSound } from './sound';
+import Icon from './Icon';
 
 type Props = {
   visible: boolean;
@@ -53,7 +54,7 @@ export default function SettingsPanel({
   };
 
   return (
-    <SidePanel visible={visible} side="right" title={strings.settingsTitle} onClose={onClose}>
+    <BottomSheet visible={visible} title={strings.settingsTitle} onClose={onClose}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -185,7 +186,7 @@ export default function SettingsPanel({
           <Text style={styles.footerMuted}>{strings.notOfficial}</Text>
         </View>
       </ScrollView>
-    </SidePanel>
+    </BottomSheet>
   );
 }
 

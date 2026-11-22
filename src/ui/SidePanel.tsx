@@ -10,7 +10,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
 
@@ -31,8 +30,9 @@ type Props = {
 };
 
 /**
- * Material 3 modal side sheet: a rounded, blurred surface that slides in over a
- * soft scrim, and can be dismissed by dragging it towards its edge.
+ * Material 3 modal side sheet: a rounded surface that slides in over a soft
+ * scrim and can be dismissed by dragging it towards its edge. It is used for
+ * the floating menu options panel; the settings form lives in a bottom sheet.
  */
 export default function SidePanel({
   visible,
@@ -52,7 +52,6 @@ export default function SidePanel({
 
   const translateX = useRef(new Animated.Value(direction * sheetWidth)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
   const translateRef = useRef(direction * sheetWidth);
 
   useEffect(() => {
@@ -62,109 +61,71 @@ export default function SidePanel({
     return () => translateX.removeListener(listener);
   }, [translateX]);
 
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
   useEffect(() => {
     if (visible) {
       setRendered(true);
-      translateX.setValue(direction * sheetWidth * 0.3);
-
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
-          friction: 9,
-          tension: 70,
+          damping: 22,
+          stiffness: 200,
+          mass: 0.9,
           useNativeDriver: true,
         }),
         Animated.timing(backdrop, {
           toValue: 1,
           duration: duration.medium2,
-          easing: easing.emphasizedDecelerate,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        Animated.timing(contentOpacity, {
-          toValue: 1,
-          duration: duration.short4,
           easing: easing.standard,
           useNativeDriver: true,
-        }).start();
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: direction * sheetWidth,
+          duration: duration.medium1,
+          easing: easing.accelerate,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdrop, {
+          toValue: 0,
+          duration: duration.short,
+          easing: easing.standard,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setRendered(false);
       });
-
-      playUiSound('open', 0.4);
-      return;
     }
-
-    Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: direction * sheetWidth,
-        duration: duration.medium1,
-        easing: easing.emphasizedAccelerate,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdrop, {
-        toValue: 0,
-        duration: duration.short4,
-        easing: easing.standard,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentOpacity, {
-        toValue: 0,
-        duration: duration.short3,
-        easing: easing.standard,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) setRendered(false);
-    });
-
-    playUiSound('close', 0.3);
-    // Only run on visibility changes, not on width changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, direction, sheetWidth, translateX, backdrop]);
 
   const pan = useRef(
     PanResponder.create({
-      // Claim horizontal drags only, so vertical lists keep scrolling.
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_event, gesture) =>
-        Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+        direction > 0 ? gesture.dx < -6 : gesture.dx > 6,
       onPanResponderMove: (_event, gesture) => {
-        const next = translateRef.current + gesture.dx;
-        const limit = sheetWidth * 0.9;
-        translateX.setValue(Math.max(-limit, Math.min(limit, next)));
-
-        const travelled = side === 'right' ? next / sheetWidth : -next / sheetWidth;
-        backdrop.setValue(Math.max(0, 1 - Math.max(0, travelled)));
+        const travelled = direction > 0 ? Math.min(0, gesture.dx) : Math.max(0, gesture.dx);
+        translateX.setValue(travelled);
       },
       onPanResponderRelease: (_event, gesture) => {
-        const travelled = side === 'right' ? translateRef.current : -translateRef.current;
-        const shouldClose = travelled > sheetWidth * 0.32 || gesture.vx * direction > 0.6;
-
+        const travelled = direction > 0 ? Math.min(0, gesture.dx) : Math.max(0, gesture.dx);
+        const velocityOk = direction > 0 ? gesture.vx < -0.4 : gesture.vx > 0.4;
+        const shouldClose = Math.abs(travelled) > 90 || velocityOk;
         if (shouldClose) {
-          onCloseRef.current();
+          onClose();
           return;
         }
         Animated.spring(translateX, {
           toValue: 0,
-          friction: 9,
-          tension: 80,
-          useNativeDriver: true,
-        }).start();
-        Animated.timing(backdrop, {
-          toValue: 1,
-          duration: duration.short3,
-          easing: easing.standard,
+          damping: 22,
+          stiffness: 220,
+          mass: 0.9,
           useNativeDriver: true,
         }).start();
       },
       onPanResponderTerminate: () => {
-        Animated.spring(translateX, {
-          toValue: 0,
-          friction: 9,
-          tension: 80,
-          useNativeDriver: true,
-        }).start();
+        translateX.setValue(0);
       },
     })
   ).current;
@@ -173,61 +134,61 @@ export default function SidePanel({
 
   return (
     <Modal
-      visible={rendered}
+      visible
       transparent
       animationType="none"
       statusBarTranslucent
+      hardwareAccelerated={Platform.OS === 'android'}
       onRequestClose={onClose}
     >
       <View style={styles.root}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdrop }]}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdrop }]}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={onClose}
-            accessibilityLabel={strings.close}
             accessibilityRole="button"
+            accessibilityLabel="Close"
           />
         </Animated.View>
 
         <Animated.View
-          {...pan.panHandlers}
           style={[
             styles.sheet,
-            side === 'right' ? styles.sheetRight : styles.sheetLeft,
+            side === 'left' ? styles.sheetLeft : styles.sheetRight,
             { width: sheetWidth, transform: [{ translateX }] },
           ]}
         >
-          <BlurView
-            intensity={Platform.OS === 'android' ? 56 : 72}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
+          <View style={styles.sheetTint} pointerEvents="none" />
+
+          <View
+            style={[styles.handle, { marginTop: Math.max(insets.top, spacing.sm) + spacing.xs }]}
+            {...pan.panHandlers}
           />
-          <View style={[StyleSheet.absoluteFill, styles.sheetTint]} />
 
-          <Animated.View style={[styles.inner, { opacity: contentOpacity }]}>
-            <View style={styles.handle} />
-
-            <View
-              style={[
-                styles.header,
-                { paddingTop: insets.top > 0 ? insets.top * 0.5 + spacing.sm : spacing.md },
-              ]}
-            >
+          <View style={styles.header}>
+            {title ? (
               <Text style={styles.title} numberOfLines={1}>
                 {title}
               </Text>
-              <IconButton
-                icon={faXmark}
-                variant="tonal"
-                onPress={onClose}
-                accessibilityLabel={strings.close}
-              />
-            </View>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+            <IconButton
+              icon={faXmark}
+              onPress={() => {
+                playUiSound('tap', 0.3);
+                onClose();
+              }}
+              variant="standard"
+              accessibilityLabel="Close"
+            />
+          </View>
 
-            <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
-              {children}
-            </View>
-          </Animated.View>
+          <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
+            {children}
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -241,6 +202,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     backgroundColor: colors.scrim,
+    opacity: 0,
   },
   sheet: {
     position: 'absolute',
@@ -268,10 +230,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
   },
   sheetTint: {
-    backgroundColor: alpha(colors.surfaceContainerLow, 0.84),
-  },
-  inner: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
+    backgroundColor: alpha(colors.surfaceContainerLow, 0.35),
   },
   handle: {
     alignSelf: 'center',

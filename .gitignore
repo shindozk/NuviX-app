@@ -40,5 +40,11 @@ yarn-error.*
 /ios
 /android
 
+# build experiments for this device (toolchain workarounds, not the app)
+/build-logic/
+
+# harness runtime output
+.harness/
+
 # generated APKs
 builds/

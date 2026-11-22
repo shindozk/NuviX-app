@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Animated } from 'react-native';
 
 import { strings } from '../i18n';
-import { colors, radius, duration, easing } from '../theme';
+import { alpha, colors, duration, easing, radius, typeScale } from '../theme';
 
 type Props = {
   onFinish: () => void;
@@ -18,6 +18,7 @@ export default function BootAnimation({ onFinish }: Props) {
   const finished = useRef(false);
   const [tapHintVisible, setTapHintVisible] = useState(true);
   const opacity = useRef(new Animated.Value(0)).current;
+  const hintFade = useRef(new Animated.Value(0)).current;
 
   const player = useVideoPlayer(require('../../assets/boot.mp4'), (instance) => {
     instance.loop = false;
@@ -33,7 +34,8 @@ export default function BootAnimation({ onFinish }: Props) {
     finished.current = true;
     Animated.timing(opacity, {
       toValue: 0,
-      duration: duration.short,
+      duration: duration.short4,
+      easing: easing.standard,
       useNativeDriver: true,
     }).start(() => {
       onFinish();
@@ -58,22 +60,40 @@ export default function BootAnimation({ onFinish }: Props) {
     if (!isPlaying) return;
     Animated.timing(opacity, {
       toValue: 1,
-      duration: duration.short,
+      duration: duration.short4,
+      easing: easing.standard,
       useNativeDriver: true,
     }).start();
-    const timer = setTimeout(() => setTapHintVisible(false), 2500);
-    return () => clearTimeout(timer);
   }, [isPlaying, opacity]);
 
+  // The skip chip appears after a beat, then fades away on its own.
   useEffect(() => {
-    if (tapHintVisible) {
-      Animated.timing(opacity, {
+    if (!tapHintVisible) return;
+    const delay = setTimeout(() => {
+      Animated.timing(hintFade, {
         toValue: 1,
-        duration: duration.short,
+        duration: duration.medium2,
+        easing: easing.emphasizedDecelerate,
         useNativeDriver: true,
       }).start();
-    }
-  }, [tapHintVisible, opacity]);
+    }, 1600);
+
+    const hide = setTimeout(() => {
+      Animated.timing(hintFade, {
+        toValue: 0,
+        duration: duration.medium1,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }).start(({ finished: done }) => {
+        if (done) setTapHintVisible(false);
+      });
+    }, 5200);
+
+    return () => {
+      clearTimeout(delay);
+      clearTimeout(hide);
+    };
+  }, [hintFade, tapHintVisible]);
 
   return (
     <Pressable style={styles.root} onPress={finish} accessibilityLabel={strings.bootSkip}>
@@ -84,14 +104,15 @@ export default function BootAnimation({ onFinish }: Props) {
         contentFit="cover"
         allowsPictureInPicture={false}
       />
+
       <Animated.View
-        style={[
-          styles.bottom,
-          { opacity: opacity },
-          !tapHintVisible && styles.skipHidden,
-        ]}
+        style={[styles.bottom, { opacity: opacity, transform: [{ translateY: hintFade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}
+        pointerEvents="none"
       >
-        <Text style={styles.skip}>{strings.bootSkip}</Text>
+        <Animated.View style={[styles.chip, { opacity: hintFade }]}>
+          <View style={styles.dot} />
+          <Text style={styles.skip}>{strings.bootSkip}</Text>
+        </Animated.View>
       </Animated.View>
     </Pressable>
   );
@@ -100,23 +121,35 @@ export default function BootAnimation({ onFinish }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.surface,
   },
   bottom: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 22,
+    bottom: 24,
     alignItems: 'center',
   },
-  skip: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    opacity: 0.85,
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    backgroundColor: alpha(colors.surface, 0.55),
+    borderWidth: 1,
+    borderColor: alpha(colors.onSurface, 0.14),
   },
-  skipHidden: {
-    opacity: 0,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  skip: {
+    ...typeScale.labelMedium,
+    color: colors.onSurfaceVariant,
+    letterSpacing: 0.4,
   },
 });

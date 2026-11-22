@@ -1,9 +1,13 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated,
   Dimensions,
-  Easing,
-  Image,
   PanResponder,
   Platform,
   Pressable,
@@ -18,14 +22,15 @@ import {
   faHouse,
   faPowerOff,
   faRotateRight,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
-import { colors, radius } from '../theme';
+import { alpha, colors, duration, easing, elevation, radius, shape, spacing, typeScale } from '../theme';
 import { strings } from '../i18n';
 import FaIcon from './Icon';
+import { ListRow, M3Switch } from './m3';
 import { playUiSound } from './sound';
-import SidePanel from './SidePanel';
 
 export type MenuAction = 'home' | 'reload' | 'touch' | 'settings' | 'exit';
 
@@ -34,22 +39,27 @@ type MenuItem = {
   icon: IconProp;
   labelKey: keyof typeof strings;
   danger?: boolean;
+  toggle?: boolean;
 };
 
 const MENU_ITEMS: MenuItem[] = [
   { action: 'home', icon: faHouse, labelKey: 'home' },
   { action: 'reload', icon: faRotateRight, labelKey: 'reload' },
-  { action: 'touch', icon: faGamepad, labelKey: 'touchControls' },
+  { action: 'touch', icon: faGamepad, labelKey: 'touchControls', toggle: true },
   { action: 'settings', icon: faGear, labelKey: 'settings' },
   { action: 'exit', icon: faPowerOff, labelKey: 'exit', danger: true },
 ];
 
-const BUTTON_SIZE = 52;
-const EDGE = 10;
-const DOCK_OPACITY = 0.7;
+const BUTTON_SIZE = 56;
+const EDGE = 12;
+const DOCK_OPACITY = 0.55;
 const ACTIVE_OPACITY = 1;
-const INACTIVITY_MS = 3000;
-const TAP_SLOP = 6;
+const INACTIVITY_MS = 3200;
+const TAP_SLOP = 8;
+
+const MENU_WIDTH = 300;
+const MENU_MARGIN = 12;
+const MENU_GAP = 10;
 
 type Props = {
   onAction: (action: MenuAction) => void;
@@ -59,13 +69,32 @@ type Props = {
 const screen = Dimensions.get('window');
 
 const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
+  Math.min(Math.max(value, min), Math.max(min, max));
 
 export type FloatingMenuHandle = { close: () => void; isOpen: () => boolean };
 
-const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu({ onAction, touchControlsOn }: Props, ref) {
+const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu(
+  { onAction, touchControlsOn },
+  ref
+) {
   const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+
+  const [layout, setLayout] = useState({
+    width: screen.width,
+    height: screen.height,
+    x: 0,
+    anchorY: 0,
+    cardW: MENU_WIDTH,
+    cardH: 0,
+    placeRight: true,
+  });
+
   const progress = useRef(new Animated.Value(0)).current;
+  const scrim = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(DOCK_OPACITY)).current;
+
   const position = useRef(
     new Animated.ValueXY({
       x: screen.width - BUTTON_SIZE - EDGE,
@@ -76,8 +105,7 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
     x: screen.width - BUTTON_SIZE - EDGE,
     y: screen.height / 2 - BUTTON_SIZE / 2,
   });
-  const opacity = useRef(new Animated.Value(DOCK_OPACITY)).current;
-  const scale = useRef(new Animated.Value(1)).current;
+
   const moved = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,11 +129,12 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: ACTIVE_OPACITY,
-        duration: 150,
+        duration: duration.short2,
+        easing: easing.standard,
         useNativeDriver: true,
       }),
       Animated.spring(scale, {
-        toValue: 1.08,
+        toValue: 1.06,
         speed: 30,
         useNativeDriver: true,
       }),
@@ -113,12 +142,11 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
   };
 
   const dockToEdge = () => {
+    const { width: w, height: h } = layout;
     const { x, y } = positionRef.current;
-    const targetX =
-      x + BUTTON_SIZE / 2 < screen.width / 2
-        ? EDGE
-        : screen.width - BUTTON_SIZE - EDGE;
-    const targetY = clamp(y, EDGE, screen.height - BUTTON_SIZE - EDGE);
+    const targetX = x + BUTTON_SIZE / 2 < w / 2 ? EDGE : w - BUTTON_SIZE - EDGE;
+    const targetY = clamp(y, EDGE, h - BUTTON_SIZE - EDGE);
+
     Animated.parallel([
       Animated.spring(position, {
         toValue: { x: targetX, y: targetY },
@@ -127,9 +155,9 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
-        toValue: DOCK_OPACITY,
-        duration: 260,
-        easing: Easing.out(Easing.quad),
+        toValue: openRef.current ? ACTIVE_OPACITY : DOCK_OPACITY,
+        duration: duration.medium2,
+        easing: easing.emphasizedDecelerate,
         useNativeDriver: true,
       }),
       Animated.spring(scale, {
@@ -138,165 +166,288 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
         useNativeDriver: true,
       }),
     ]).start();
-    playUiSound('dock', 0.3);
+    playUiSound('dock', 0.28);
   };
 
   const scheduleDock = (delay = INACTIVITY_MS) => {
     clearInactivity();
-    inactivityTimer.current = setTimeout(dockToEdge, delay);
+    inactivityTimer.current = setTimeout(() => {
+      if (!openRef.current) dockToEdge();
+    }, delay);
   };
 
-  useEffect(() => {
-    return () => clearInactivity();
-  }, []);
+  const openMenu = () => {
+    const { width: w, height: h } = layout;
+    const { x, y } = positionRef.current;
+
+    const cardW = Math.min(MENU_WIDTH, w - MENU_MARGIN * 2);
+    const placeRight = x + BUTTON_SIZE + MENU_GAP + cardW <= w - MENU_MARGIN;
+    const rawX = placeRight ? x + BUTTON_SIZE + MENU_GAP : x - cardW - MENU_GAP;
+
+    setLayout((current) => ({
+      ...current,
+      x: clamp(rawX, MENU_MARGIN, w - cardW - MENU_MARGIN),
+      anchorY: y + BUTTON_SIZE / 2,
+      cardW,
+      placeRight,
+    }));
+
+    clearInactivity();
+    openRef.current = true;
+    setOpen(true);
+
+    Animated.parallel([
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: duration.medium2,
+        easing: easing.emphasizedDecelerate,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scrim, {
+        toValue: 1,
+        duration: duration.short4,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: ACTIVE_OPACITY,
+        duration: duration.short2,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        speed: 30,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    playUiSound('open', 0.4);
+  };
+
+  const closeMenu = () => {
+    if (!openRef.current) return;
+    openRef.current = false;
+
+    Animated.parallel([
+      Animated.timing(progress, {
+        toValue: 0,
+        duration: duration.short3,
+        easing: easing.emphasizedAccelerate,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scrim, {
+        toValue: 0,
+        duration: duration.short3,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      setOpen(false);
+      scheduleDock(600);
+    });
+
+    playUiSound('close', 0.3);
+  };
+
+  const actions = useRef({ wake, dock: dockToEdge, open: openMenu, close: closeMenu });
+  actions.current = { wake, dock: dockToEdge, open: openMenu, close: closeMenu };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         moved.current = false;
         dragStart.current = { ...positionRef.current };
-        wake();
+        if (openRef.current) actions.current.close();
+        actions.current.wake();
       },
       onPanResponderMove: (_event, gesture) => {
         if (!moved.current && Math.hypot(gesture.dx, gesture.dy) > TAP_SLOP) {
           moved.current = true;
           Animated.spring(scale, {
-            toValue: 1.15,
+            toValue: 1.12,
             speed: 30,
             useNativeDriver: true,
           }).start();
         }
         if (!moved.current) return;
-        const x = clamp(
-          dragStart.current.x + gesture.dx,
-          EDGE,
-          screen.width - BUTTON_SIZE - EDGE
-        );
-        const y = clamp(
-          dragStart.current.y + gesture.dy,
-          EDGE,
-          screen.height - BUTTON_SIZE - EDGE
-        );
-        position.setValue({ x, y });
+
+        const { width: w, height: h } = layout;
+        position.setValue({
+          x: clamp(dragStart.current.x + gesture.dx, 0, w - BUTTON_SIZE),
+          y: clamp(dragStart.current.y + gesture.dy, 0, h - BUTTON_SIZE),
+        });
       },
-      onPanResponderRelease: (_event, gesture) => {
+      onPanResponderRelease: () => {
         if (!moved.current) {
-          playUiSound('open', 0.4);
-          Animated.spring(scale, {
-            toValue: 1,
-            speed: 25,
-            useNativeDriver: true,
-          }).start();
-          Animated.timing(opacity, {
-            toValue: ACTIVE_OPACITY,
-            duration: 150,
-            useNativeDriver: true,
-          }).start();
-          setOpen(true);
+          if (openRef.current) actions.current.close();
+          else actions.current.open();
           return;
         }
-        const { x } = positionRef.current;
-        const nearEdge =
-          x <= EDGE + 24 || x >= screen.width - BUTTON_SIZE - EDGE - 24;
-        if (nearEdge) {
-          dockToEdge();
-        } else {
-          Animated.spring(scale, {
-            toValue: 1,
-            speed: 25,
-            useNativeDriver: true,
-          }).start();
-          scheduleDock(INACTIVITY_MS);
-        }
+        actions.current.dock();
       },
-      onPanResponderTerminate: () => scheduleDock(INACTIVITY_MS),
+      onPanResponderTerminate: () => {
+        if (moved.current) actions.current.dock();
+      },
     })
   ).current;
 
-  const handleAction = (action: MenuAction) => {
-    if (action === 'touch') {
-      // Toggle touch controls without closing the menu
-      playUiSound('toggle', 0.4);
-      onAction(action);
-      return;
-    }
-    playUiSound('tap', 0.4);
-    setOpen(false);
-    scheduleDock(400);
-    setTimeout(() => onAction(action), 180);
-  };
+  useEffect(() => () => clearInactivity(), []);
 
   useImperativeHandle(ref, () => ({
-    close: () => { setOpen(false); scheduleDock(400); },
-    isOpen: () => open,
+    close: closeMenu,
+    isOpen: () => openRef.current,
   }));
+
+  /** Toggle used by both the drag handler and assistive technologies. */
+  const toggleMenu = () => {
+    if (openRef.current) closeMenu();
+    else openMenu();
+  };
+
+  const handleItemPress = (item: MenuItem) => {
+    playUiSound('tap', 0.4);
+    if (item.toggle) {
+      onAction(item.action);
+      return;
+    }
+    closeMenu();
+    onAction(item.action);
+  };
+
+  const cardTranslate = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [layout.placeRight ? -16 : 16, 0],
+  });
+  const cardScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1],
+  });
+  const scrimOpacity = scrim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.34],
+  });
+
+  const cardTop = (() => {
+    const halfCard = layout.cardH > 0 ? layout.cardH / 2 : 150;
+    return clamp(
+      layout.anchorY - halfCard,
+      MENU_MARGIN,
+      layout.height - Math.min(layout.cardH || 300, layout.height) - MENU_MARGIN
+    );
+  })();
+
+  const logoSource =
+    Platform.OS === 'android'
+      ? require('../../assets/android-icon_logo.png')
+      : require('../../assets/icon.png');
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* Side panel on the left */}
-      <SidePanel visible={open} side="left" title={strings.menu} onClose={() => { setOpen(false); scheduleDock(400); }}>
-        <View style={styles.menuContent}>
-          {MENU_ITEMS.map((item) => (
-            <Pressable
-              key={item.action}
-              onPress={() => handleAction(item.action)}
-              style={({ pressed }) => [
-                styles.menuItem,
-                item.danger && styles.menuItemDanger,
-                pressed && styles.menuItemPressed,
-              ]}
-              accessibilityRole={item.action === 'touch' ? 'switch' : 'button'}
-              accessibilityState={item.action === 'touch' ? { checked: touchControlsOn } : undefined}
-            >
-              <View style={[styles.menuItemIcon, item.danger && styles.menuItemIconDanger]}>
-                <FaIcon
-                  icon={item.icon}
-                  size={18}
-                  color={item.danger ? colors.danger : touchControlsOn && item.action === 'touch' ? colors.accentBright : colors.textSecondary}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.menuItemLabel,
-                  item.danger && styles.menuItemLabelDanger,
-                  touchControlsOn && item.action === 'touch' && styles.menuItemLabelActive,
-                ]}
-              >
-                {strings[item.labelKey]}
-              </Text>
-              {item.action === 'touch' && (
-                <View style={[styles.togglePill, touchControlsOn && styles.togglePillOn]}>
-                  <View style={[styles.toggleDot, touchControlsOn && styles.toggleDotOn]} />
-                </View>
-              )}
-            </Pressable>
-          ))}
-        </View>
-      </SidePanel>
+      {open ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: scrimOpacity }]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeMenu}
+            accessibilityLabel={strings.close}
+            accessibilityRole="button"
+          />
+        </Animated.View>
+      ) : null}
 
-      {/* Draggable floating button */}
+      {open ? (
+        <Animated.View
+          style={[
+            styles.card,
+            elevation.level3,
+            {
+              left: layout.x,
+              top: cardTop,
+              width: layout.cardW,
+              opacity: progress,
+              transform: [{ translateX: cardTranslate }, { scale: cardScale }],
+            },
+          ]}
+          onLayout={(event) => {
+            const next = event.nativeEvent.layout.height;
+            setLayout((current) =>
+              Math.abs(next - current.cardH) > 1 ? { ...current, cardH: next } : current
+            );
+          }}
+        >
+          <BlurView
+            intensity={Platform.OS === 'android' ? 48 : 60}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFill, styles.cardTint]} />
+
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{strings.menu}</Text>
+            <View style={styles.cardHandle} />
+          </View>
+
+          {MENU_ITEMS.map((item) => (
+            <ListRow
+              key={item.action}
+              icon={item.icon}
+              label={strings[item.labelKey]}
+              tone={item.danger ? 'danger' : 'default'}
+              selected={item.toggle ? touchControlsOn : undefined}
+              onPress={() => handleItemPress(item)}
+              accessibilityRole={item.toggle ? 'switch' : 'button'}
+              accessibilityState={item.toggle ? { checked: touchControlsOn } : undefined}
+              trailing={
+                item.toggle ? (
+                  <View pointerEvents="none" style={styles.check}>
+                    <M3Switch
+                      value={touchControlsOn}
+                      onValueChange={() => undefined}
+                      accessibilityLabel={strings.touchControls}
+                    />
+                  </View>
+                ) : null
+              }
+            />
+          ))}
+        </Animated.View>
+      ) : null}
+
+      {/* Draggable dock button */}
       <Animated.View
         style={[
           styles.button,
-          { transform: [{ translateX: position.x }, { translateY: position.y }, { scale }] },
+          elevation.level2,
+          {
+            opacity,
+            transform: [
+              { translateX: position.x },
+              { translateY: position.y },
+              { scale },
+            ],
+          },
         ]}
+        {...panResponder.panHandlers}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={strings.menu}
+        accessibilityState={{ expanded: open }}
+        onAccessibilityTap={toggleMenu}
       >
         <Animated.View style={[styles.buttonInner, { opacity }]}>
-          <Pressable style={styles.buttonHit}>
-            <View {...panResponder.panHandlers} style={styles.buttonContent}>
-              <Image
-                source={
-                  Platform.OS === 'android'
-                    ? require('../../assets/android-icon_logo.png')
-                    : require('../../assets/icon.png')
-                }
-                style={styles.logo}
-                resizeMode="cover"
-              />
-            </View>
-          </Pressable>
+          {open ? (
+            <FaIcon icon={faXmark} size={20} color={colors.onPrimaryContainer} />
+          ) : (
+            <Animated.Image
+              source={logoSource}
+              style={styles.logo}
+              resizeMode="cover"
+            />
+          )}
         </Animated.View>
       </Animated.View>
     </View>
@@ -312,111 +463,69 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 999,
-    elevation: 999,
+    zIndex: 90,
+    elevation: 90,
   },
-  menuContent: {
-    padding: 16,
-    gap: 6,
+
+  card: {
+    position: 'absolute',
+    borderRadius: shape.xl,
+    paddingBottom: spacing.sm,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: alpha(colors.onSurface, 0.08),
+    backgroundColor: colors.surfaceContainer,
   },
-  menuItem: {
+  cardTint: {
+    backgroundColor: alpha(colors.surfaceContainerHigh, 0.7),
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
   },
-  menuItemDanger: {
-    backgroundColor: 'rgba(223, 74, 74, 0.08)',
-    borderColor: 'rgba(223, 74, 74, 0.2)',
+  cardTitle: {
+    ...typeScale.labelMedium,
+    color: colors.onSurfaceVariant,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
-  menuItemPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  cardHandle: {
+    width: 22,
+    height: 4,
+    borderRadius: shape.full,
+    backgroundColor: alpha(colors.onSurface, 0.16),
   },
-  menuItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  check: {
+    marginLeft: spacing.xs,
   },
-  menuItemIconDanger: {
-    backgroundColor: 'rgba(223, 74, 74, 0.12)',
-    borderColor: 'rgba(223, 74, 74, 0.3)',
-  },
-  menuItemLabel: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  menuItemLabelActive: {
-    color: colors.accentBright,
-    fontWeight: '600',
-  },
-  menuItemLabelDanger: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  togglePill: {
-    width: 36,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  togglePillOn: {
-    backgroundColor: colors.accentSoft,
-  },
-  toggleDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.textTertiary,
-  },
-  toggleDotOn: {
-    backgroundColor: colors.accent,
-    alignSelf: 'flex-end',
-  },
+
   button: {
     position: 'absolute',
     top: 0,
     left: 0,
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
-    zIndex: 999,
-    elevation: 999,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: alpha(colors.primary, 0.35),
+    backgroundColor: colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonInner: {
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(20, 20, 28, 0.55)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(29, 184, 101, 0.5)',
-  },
-  buttonHit: {
-    width: '100%',
-    height: '100%',
-  },
-  buttonContent: {
-    width: '100%',
-    height: '100%',
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   logo: {
-    width: BUTTON_SIZE - 8,
-    height: BUTTON_SIZE - 8,
-    borderRadius: radius.pill,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
   },
 });

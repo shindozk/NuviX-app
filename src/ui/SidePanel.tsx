@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Easing,
   Modal,
+  PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-
-import { colors, radius } from '../theme';
-import FaIcon from './Icon';
-import { playUiSound } from './sound';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
-import type { IconProp } from '@fortawesome/fontawesome-svg-core';
+
+import { alpha, colors, duration, easing, shape, spacing, typeScale } from '../theme';
+import { strings } from '../i18n';
+import { IconButton } from './m3';
+import { playUiSound } from './sound';
 
 export type SidePanelSide = 'left' | 'right';
 
@@ -27,6 +30,10 @@ type Props = {
   width?: number;
 };
 
+/**
+ * Material 3 modal side sheet: a rounded, blurred surface that slides in over a
+ * soft scrim, and can be dismissed by dragging it towards its edge.
+ */
 export default function SidePanel({
   visible,
   side = 'right',
@@ -35,108 +42,192 @@ export default function SidePanel({
   children,
   width = 360,
 }: Props) {
+  const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+
+  const sheetWidth = Math.min(width, Math.max(240, screenWidth - 48));
+  const direction = side === 'right' ? 1 : -1;
+
   const [rendered, setRendered] = useState(visible);
-  const translateX = useRef(new Animated.Value(side === 'right' ? width : -width)).current;
+
+  const translateX = useRef(new Animated.Value(direction * sheetWidth)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
+  const translateRef = useRef(direction * sheetWidth);
+
+  useEffect(() => {
+    const listener = translateX.addListener(({ value }) => {
+      translateRef.current = value;
+    });
+    return () => translateX.removeListener(listener);
+  }, [translateX]);
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (visible) {
       setRendered(true);
+      translateX.setValue(direction * sheetWidth * 0.3);
+
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
-          friction: 8,
+          friction: 9,
           tension: 70,
           useNativeDriver: true,
         }),
         Animated.timing(backdrop, {
-          toValue: 0.45,
-          duration: 260,
-          easing: Easing.out(Easing.quad),
+          toValue: 1,
+          duration: duration.medium2,
+          easing: easing.emphasizedDecelerate,
           useNativeDriver: true,
         }),
       ]).start(() => {
         Animated.timing(contentOpacity, {
           toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.quad),
+          duration: duration.short4,
+          easing: easing.standard,
           useNativeDriver: true,
         }).start();
       });
+
       playUiSound('open', 0.4);
-    } else if (rendered) {
-      Animated.parallel([
-        Animated.timing(contentOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateX, {
-          toValue: side === 'right' ? width : -width,
-          duration: 220,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdrop, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setRendered(false));
+      return;
     }
+
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: direction * sheetWidth,
+        duration: duration.medium1,
+        easing: easing.emphasizedAccelerate,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdrop, {
+        toValue: 0,
+        duration: duration.short4,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: 0,
+        duration: duration.short3,
+        easing: easing.standard,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setRendered(false);
+    });
+
+    playUiSound('close', 0.3);
+    // Only run on visibility changes, not on width changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
+  const pan = useRef(
+    PanResponder.create({
+      // Claim horizontal drags only, so vertical lists keep scrolling.
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+      onPanResponderMove: (_event, gesture) => {
+        const next = translateRef.current + gesture.dx;
+        const limit = sheetWidth * 0.9;
+        translateX.setValue(Math.max(-limit, Math.min(limit, next)));
+
+        const travelled = side === 'right' ? next / sheetWidth : -next / sheetWidth;
+        backdrop.setValue(Math.max(0, 1 - Math.max(0, travelled)));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        const travelled = side === 'right' ? translateRef.current : -translateRef.current;
+        const shouldClose = travelled > sheetWidth * 0.32 || gesture.vx * direction > 0.6;
+
+        if (shouldClose) {
+          onCloseRef.current();
+          return;
+        }
+        Animated.spring(translateX, {
+          toValue: 0,
+          friction: 9,
+          tension: 80,
+          useNativeDriver: true,
+        }).start();
+        Animated.timing(backdrop, {
+          toValue: 1,
+          duration: duration.short3,
+          easing: easing.standard,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          friction: 9,
+          tension: 80,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
   if (!rendered) return null;
 
-  const isLeft = side === 'left';
-
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <View style={[styles.root, isLeft ? styles.rootLeft : styles.rootRight]}>
+    <Modal
+      visible={rendered}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdrop }]}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => {
-              playUiSound('close', 0.4);
-              onClose();
-            }}
+            onPress={onClose}
+            accessibilityLabel={strings.close}
+            accessibilityRole="button"
           />
         </Animated.View>
 
         <Animated.View
+          {...pan.panHandlers}
           style={[
             styles.sheet,
-            isLeft ? styles.sheetLeft : styles.sheetRight,
-            { width, transform: [{ translateX }] },
+            side === 'right' ? styles.sheetRight : styles.sheetLeft,
+            { width: sheetWidth, transform: [{ translateX }] },
           ]}
         >
-          <BlurView intensity={70} tint="dark" style={styles.sheetBlur}>
-            <View style={styles.sheetInner}>
-              <View style={styles.handle} />
-              {title ? (
-                <View style={styles.header}>
-                  <Text style={styles.title}>{title}</Text>
-                  <Pressable
-                    onPress={() => {
-                      playUiSound('close', 0.4);
-                      onClose();
-                    }}
-                    style={styles.closeButton}
-                    hitSlop={8}
-                    accessibilityLabel="Close"
-                  >
-                    <FaIcon icon={faXmark} size={18} color={colors.textPrimary} />
-                  </Pressable>
-                </View>
-              ) : null}
+          <BlurView
+            intensity={Platform.OS === 'android' ? 56 : 72}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFill, styles.sheetTint]} />
 
-              <Animated.View style={{ opacity: contentOpacity, flex: 1 }}>
-                {children}
-              </Animated.View>
+          <Animated.View style={[styles.inner, { opacity: contentOpacity }]}>
+            <View style={styles.handle} />
+
+            <View
+              style={[
+                styles.header,
+                { paddingTop: insets.top > 0 ? insets.top * 0.5 + spacing.sm : spacing.md },
+              ]}
+            >
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              <IconButton
+                icon={faXmark}
+                variant="tonal"
+                onPress={onClose}
+                accessibilityLabel={strings.close}
+              />
             </View>
-          </BlurView>
+
+            <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
+              {children}
+            </View>
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>
@@ -146,72 +237,65 @@ export default function SidePanel({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor: 'transparent',
   },
-  rootLeft: {
-    justifyContent: 'flex-start',
-  },
-  rootRight: {
-    justifyContent: 'flex-end',
-  },
   backdrop: {
-    backgroundColor: '#000000',
+    backgroundColor: colors.scrim,
   },
   sheet: {
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: alpha(colors.onSurface, 0.08),
+    backgroundColor: colors.surfaceContainer,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
   },
   sheetLeft: {
-    borderTopRightRadius: radius.xxl,
-    borderBottomRightRadius: radius.xxl,
-    borderLeftWidth: 0,
+    left: 0,
+    borderTopRightRadius: shape.xl,
+    borderBottomRightRadius: shape.xl,
+    borderRightWidth: 1,
   },
   sheetRight: {
-    borderTopLeftRadius: radius.xxl,
-    borderBottomLeftRadius: radius.xxl,
-    borderRightWidth: 0,
+    right: 0,
+    borderTopLeftRadius: shape.xl,
+    borderBottomLeftRadius: shape.xl,
+    borderLeftWidth: 1,
   },
-  sheetBlur: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 20, 16, 0.75)',
+  sheetTint: {
+    backgroundColor: alpha(colors.surfaceContainerLow, 0.84),
   },
-  sheetInner: {
-    backgroundColor: 'rgba(15, 20, 16, 0.62)',
+  inner: {
     flex: 1,
-    paddingBottom: 20,
   },
   handle: {
     alignSelf: 'center',
-    width: 36,
+    width: 34,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginTop: 10,
+    borderRadius: shape.full,
+    backgroundColor: alpha(colors.onSurface, 0.22),
+    marginTop: spacing.sm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 6,
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
   },
   title: {
-    color: colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '600',
+    ...typeScale.titleLarge,
+    color: colors.onSurface,
+    flex: 1,
   },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
   },
 });

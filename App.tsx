@@ -1,50 +1,78 @@
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as NavigationBar from 'expo-navigation-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { StatusBar, Platform, StyleSheet, View, BackHandler, Dimensions } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, MD3DarkTheme } from 'react-native-paper';
 import React from 'react';
 
+import { alpha, colors, shape } from './src/theme';
+
+/**
+ * React Native Paper theme built from the same Material 3 role table as
+ * `src/theme.ts`, so Paper components and the hand-built primitives match.
+ */
 const nuvixTheme = {
   ...MD3DarkTheme,
+  dark: true,
+  roundness: shape.md,
+  version: 3,
+  isV3: true,
   colors: {
     ...MD3DarkTheme.colors,
-    primary: '#1DB865',
-    onPrimary: '#FFFFFF',
-    primaryContainer: '#1C4D32',
-    onPrimaryContainer: '#E8F5E9',
-    secondary: '#3EB771',
-    onSecondary: '#000000',
-    secondaryContainer: '#28654D',
-    onSecondaryContainer: '#E1F7ED',
-    tertiary: '#5DA9C9',
-    onTertiary: '#000000',
-    tertiaryContainer: '#1F4E65',
-    onTertiaryContainer: '#E2F4FC',
-    error: '#CF6679',
-    onError: '#000000',
-    errorContainer: '#36111D',
-    onErrorContainer: '#FFDAD9',
-    background: '#070A08',
-    onBackground: '#EAF2EC',
-    surface: '#0F1410',
-    onSurface: '#EAF2EC',
-    surfaceVariant: '#1C241D',
-    onSurfaceVariant: '#8CA398',
-    outline: '#3A4F42',
-    outlineVariant: '#2E4135',
+    primary: colors.primary,
+    onPrimary: colors.onPrimary,
+    primaryContainer: colors.primaryContainer,
+    onPrimaryContainer: colors.onPrimaryContainer,
+    inversePrimary: '#2F6B45',
+
+    secondary: colors.secondary,
+    onSecondary: colors.onSecondary,
+    secondaryContainer: colors.secondaryContainer,
+    onSecondaryContainer: colors.onSecondaryContainer,
+
+    tertiary: colors.tertiary,
+    onTertiary: colors.onTertiary,
+    tertiaryContainer: colors.tertiaryContainer,
+    onTertiaryContainer: colors.onTertiaryContainer,
+
+    error: colors.error,
+    onError: colors.onError,
+    errorContainer: colors.errorContainer,
+    onErrorContainer: colors.onErrorContainer,
+
+    background: colors.background,
+    onBackground: colors.onSurface,
+    surface: colors.surface,
+    onSurface: colors.onSurface,
+    surfaceVariant: colors.surfaceVariant,
+    onSurfaceVariant: colors.onSurfaceVariant,
+    surfaceDisabled: alpha(colors.onSurface, 0.12),
+    onSurfaceDisabled: colors.textDisabled,
+    inverseSurface: colors.inverseSurface,
+    inverseOnSurface: colors.onInverseSurface,
+
+    outline: colors.outline,
+    outlineVariant: colors.outlineVariant,
+    shadow: colors.shadow,
+    scrim: colors.scrim,
+
+    backdrop: alpha(colors.surfaceContainerLowest, 0.6),
+    notification: colors.surfaceContainerHigh,
+
     elevation: {
       level0: 'transparent',
-      level1: '#0F1410',
-      level2: '#131A14',
-      level3: '#161F17',
-      level4: '#192319',
-      level5: '#1C281C',
+      level1: colors.surfaceContainerLow,
+      level2: colors.surfaceContainer,
+      level3: colors.surfaceContainerHigh,
+      level4: colors.surfaceContainerHighest,
+      level5: colors.surfaceBright,
     },
   },
-};
+} as typeof MD3DarkTheme;
 
 import BootAnimation from './src/boot/BootAnimation';
 import { useSettings } from './src/settings';
@@ -100,6 +128,14 @@ function Root() {
 
   React.useEffect(() => {
     SplashScreen.hideAsync().catch(() => undefined);
+
+    // Match the system bars and window background to the Material You surface,
+    // so nothing flashes white behind the WebView.
+    SystemUI.setBackgroundColorAsync(colors.surface).catch(() => undefined);
+    if (Platform.OS === 'android') {
+      NavigationBar.setStyle('dark');
+      NavigationBar.setVisibilityAsync('hidden').catch(() => undefined);
+    }
   }, []);
 
   // Interface sounds follow the user setting.
@@ -256,9 +292,10 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.surface,
   },
   stage: {
     flex: 1,
+    backgroundColor: colors.surface,
   },
 });

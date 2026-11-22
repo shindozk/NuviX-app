@@ -1,29 +1,23 @@
-import React from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Chip as PaperChip, Switch as PaperSwitch, TextInput as PaperTextInput, Button as PaperButton } from 'react-native-paper';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   faDatabase,
   faGlobe,
   faMagnifyingGlass,
+  faMicrochip,
+  faRotateRight,
   faSliders,
   faUser,
   faVolumeHigh,
-  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
-import { colors, radius } from '../theme';
+import { alpha, colors, spacing, typeScale } from '../theme';
 import { ZOOM_OPTIONS, type Settings, type UserAgentMode } from '../settings';
 import { strings } from '../i18n';
-import FaIcon from './Icon';
-import { playUiSound } from './sound';
+import { Button, ChipRow, Divider, ListRow, M3Switch, SectionHeader, Segmented, TextField } from './m3';
 import SidePanel from './SidePanel';
+import { playUiSound } from './sound';
 
 type Props = {
   visible: boolean;
@@ -41,6 +35,8 @@ const UA_OPTIONS: { mode: UserAgentMode; label: string }[] = [
   { mode: 'custom', label: strings.uaCustom },
 ];
 
+const ZOOM_SEGMENTS = ZOOM_OPTIONS.map((option) => ({ value: option, label: `${option}%` }));
+
 export default function SettingsPanel({
   visible,
   settings,
@@ -49,129 +45,145 @@ export default function SettingsPanel({
   onLogin,
   onReset,
 }: Props) {
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
+  const change = (patch: Partial<Settings>) => {
+    playUiSound('toggle', 0.4);
+    onChange(patch);
+  };
+
   return (
     <SidePanel visible={visible} side="right" title={strings.settingsTitle} onClose={onClose}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Section icon={faGlobe} title={strings.userAgent}>
           <Text style={styles.hint}>{strings.userAgentHint}</Text>
-          <View style={styles.chips}>
-            {UA_OPTIONS.map((option) => (
-              <PaperChip
-                key={option.mode}
-                selected={settings.userAgentMode === option.mode}
-                onPress={() => {
-                  playUiSound('tap', 0.35);
-                  onChange({ userAgentMode: option.mode });
-                }}
-                style={[styles.chip, settings.userAgentMode === option.mode && styles.chipActive]}
-                textStyle={[styles.chipText, settings.userAgentMode === option.mode && styles.chipTextActive]}
-                showSelectedOverlay={false}
-                mode="outlined"
-              >
-                {option.label}
-              </PaperChip>
-            ))}
-          </View>
-          {settings.userAgentMode === 'custom' && (
-            <PaperTextInput
+          <ChipRow<UserAgentMode>
+            options={UA_OPTIONS.map((option) => ({
+              value: option.mode,
+              label: option.label,
+            }))}
+            value={settings.userAgentMode}
+            onChange={(value) => change({ userAgentMode: value })}
+            accessibilityLabel={strings.userAgent}
+          />
+          {settings.userAgentMode === 'custom' ? (
+            <TextField
+              label={strings.customUa}
               value={settings.customUserAgent}
               onChangeText={(value) => onChange({ customUserAgent: value })}
               placeholder={strings.customUaPlaceholder}
-              placeholderTextColor={colors.textTertiary}
-              style={styles.input}
-              textColor={colors.textPrimary}
-              mode="outlined"
-              outlineColor="rgba(255,255,255,0.12)"
-              activeOutlineColor={colors.accent}
               multiline
             />
-          )}
+          ) : null}
         </Section>
 
         <Section icon={faMagnifyingGlass} title={strings.zoom}>
-          <View style={styles.chips}>
-            {ZOOM_OPTIONS.map((option) => (
-              <PaperChip
-                key={option}
-                selected={settings.zoom === option}
-                onPress={() => {
-                  playUiSound('tap', 0.35);
-                  onChange({ zoom: option });
-                }}
-                style={[styles.chip, settings.zoom === option && styles.chipActive]}
-                textStyle={[styles.chipText, settings.zoom === option && styles.chipTextActive]}
-                showSelectedOverlay={false}
-                mode="outlined"
-              >
-                {option}%
-              </PaperChip>
-            ))}
-          </View>
+          <Segmented<number>
+            options={ZOOM_SEGMENTS}
+            value={settings.zoom}
+            onChange={(value) => change({ zoom: value })}
+            accessibilityLabel={strings.zoom}
+          />
         </Section>
 
         <Section icon={faSliders} title={strings.behavior}>
-          <ToggleRow
-            label={strings.keepAwake}
-            value={settings.keepAwake}
-            onValueChange={(value) => {
-              playUiSound('toggle', 0.4);
-              onChange({ keepAwake: value });
-            }}
-          />
-          <ToggleRow
-            label={strings.touchControlsToggle}
-            value={settings.touchControls}
-            onValueChange={(value) => {
-              playUiSound('toggle', 0.4);
-              onChange({ touchControls: value });
-            }}
-          />
-          <ToggleRow
-            label={strings.uiSounds}
-            icon={faVolumeHigh}
-            value={settings.uiSounds}
-            onValueChange={(value) => {
-              playUiSound('toggle', 0.4);
-              onChange({ uiSounds: value });
-            }}
-          />
+          <View style={styles.card}>
+            <ToggleRow
+              label={strings.keepAwake}
+              value={settings.keepAwake}
+              onValueChange={(value) => change({ keepAwake: value })}
+            />
+            <Divider style={styles.divider} />
+            <ToggleRow
+              label={strings.touchControlsToggle}
+              value={settings.touchControls}
+              onValueChange={(value) => change({ touchControls: value })}
+            />
+            <Divider style={styles.divider} />
+            <ToggleRow
+              label={strings.uiSounds}
+              icon={faVolumeHigh}
+              value={settings.uiSounds}
+              onValueChange={(value) => change({ uiSounds: value })}
+            />
+          </View>
+        </Section>
+
+        <Section icon={faMicrochip} title={strings.performance}>
+          <View style={styles.card}>
+            <ToggleRow
+              label={strings.showStats}
+              value={settings.showPerformanceStats}
+              onValueChange={(value) => change({ showPerformanceStats: value })}
+            />
+            <Divider style={styles.divider} />
+            <ToggleRow
+              label={strings.enableHaptics}
+              value={settings.enableHaptics}
+              onValueChange={(value) => change({ enableHaptics: value })}
+            />
+          </View>
         </Section>
 
         <Section icon={faUser} title={strings.account}>
-          <Text style={styles.hint}>{strings.signInHint}</Text>
-          <PaperButton
-            mode="contained"
-            onPress={() => {
-              playUiSound('tap', 0.4);
-              onLogin();
-            }}
-            style={styles.filledButton}
-            labelStyle={styles.filledButtonText}
-            buttonColor={colors.accent}
-          >
-            {strings.accountAction}
-          </PaperButton>
+          <View style={styles.card}>
+            <Text style={styles.body}>{strings.signInHint}</Text>
+            <View style={styles.actions}>
+              <Button
+                label={strings.accountAction}
+                icon={faUser}
+                onPress={() => {
+                  playUiSound('tap', 0.4);
+                  onLogin();
+                }}
+              />
+            </View>
+          </View>
         </Section>
 
         <Section icon={faDatabase} title={strings.data}>
-          <PaperButton
-            mode="outlined"
-            onPress={() => {
-              playUiSound('tap', 0.4);
-              onReset();
-            }}
-            style={styles.outlinedDangerButton}
-            labelStyle={styles.dangerText}
-            textColor={colors.danger}
-          >
-            {strings.resetSettings}
-          </PaperButton>
+          {confirmingReset ? (
+            <View style={[styles.card, styles.confirmCard]}>
+              <Text style={styles.body}>{strings.resetConfirm}</Text>
+              <View style={styles.confirmActions}>
+                <Button
+                  label={strings.cancel}
+                  variant="outlined"
+                  onPress={() => setConfirmingReset(false)}
+                />
+                <Button
+                  label={strings.confirm}
+                  tone="danger"
+                  onPress={() => {
+                    setConfirmingReset(false);
+                    playUiSound('tap', 0.4);
+                    onReset();
+                  }}
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <ListRow
+                icon={faRotateRight}
+                label={strings.resetSettings}
+                tone="danger"
+                onPress={() => setConfirmingReset(true)}
+              />
+            </View>
+          )}
         </Section>
 
-        <Text style={styles.footer}>
-          {strings.appName} · {strings.version} 1.0.0
-        </Text>
-        <Text style={styles.footer}>{strings.notOfficial}</Text>
+        <View style={styles.footerBox}>
+          <Text style={styles.footer}>
+            {strings.appName} · {strings.version} 1.0.0
+          </Text>
+          <Text style={styles.footerMuted}>{strings.notOfficial}</Text>
+        </View>
       </ScrollView>
     </SidePanel>
   );
@@ -186,13 +198,8 @@ type SectionProps = {
 function Section({ icon, title, children }: SectionProps) {
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionIcon}>
-          <FaIcon icon={icon} size={14} color={colors.accentBright} />
-        </View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-      </View>
-      {children}
+      <SectionHeader icon={icon} title={title} />
+      <View style={styles.sectionBody}>{children}</View>
     </View>
   );
 }
@@ -206,142 +213,88 @@ type ToggleRowProps = {
 
 function ToggleRow({ label, icon, value, onValueChange }: ToggleRowProps) {
   return (
-    <Pressable
+    <ListRow
+      icon={icon}
+      label={label}
       onPress={() => onValueChange(!value)}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-    >
-      {icon ? (
-        <View style={styles.rowIcon}>
-          <FaIcon icon={icon} size={14} color={colors.textSecondary} />
+      trailing={
+        <View pointerEvents="none" style={styles.switchWrap}>
+          <M3Switch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
         </View>
-      ) : null}
-      <Text style={styles.rowLabel}>{label}</Text>
-      <PaperSwitch
-        value={value}
-        onValueChange={onValueChange}
-        color={colors.accent}
-        style={styles.switch}
-      />
-    </Pressable>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    padding: 20,
-    gap: 22,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.sm,
+    gap: spacing.xxl,
   },
   section: {
-    gap: 12,
+    gap: spacing.md,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  sectionBody: {
+    gap: spacing.xs,
   },
-  sectionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(29, 184, 101, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  card: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 20,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
     borderWidth: 1,
-    borderColor: 'rgba(29, 184, 101, 0.3)',
+    borderColor: alpha(colors.onSurface, 0.05),
+    overflow: 'hidden',
   },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+  divider: {
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.xxs,
+  },
+  switchWrap: {
+    marginLeft: spacing.xs,
   },
   hint: {
-    color: colors.textTertiary,
-    fontSize: 13,
-    lineHeight: 19,
+    ...typeScale.bodyMedium,
+    color: colors.onSurfaceVariant,
   },
-  chips: {
+  body: {
+    ...typeScale.bodyMedium,
+    color: colors.onSurfaceVariant,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  actions: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  confirmCard: {
+    gap: spacing.md,
+    padding: spacing.md,
+    paddingTop: 0,
+  },
+  confirmActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
+    paddingLeft: spacing.md,
   },
-  chip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  chipActive: {
-    backgroundColor: 'rgba(29, 184, 101, 0.2)',
-    borderColor: colors.accent,
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: colors.accentBright,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    fontSize: 13,
-    minHeight: 56,
-  },
-  row: {
-    flexDirection: 'row',
+  footerBox: {
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  rowPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowLabel: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  switch: {
-    transform: [{ scale: 0.9 }],
-  },
-  filledButton: {
-    alignSelf: 'flex-start',
-    borderRadius: radius.pill,
-  },
-  filledButtonText: {
-    color: colors.onPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  outlinedDangerButton: {
-    alignSelf: 'flex-start',
-    borderRadius: radius.pill,
-    borderColor: 'rgba(223, 74, 74, 0.55)',
-  },
-  dangerText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: '600',
+    gap: spacing.xxs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   footer: {
+    ...typeScale.labelMedium,
+    color: colors.textSecondary,
+    letterSpacing: 0.4,
+  },
+  footerMuted: {
+    ...typeScale.bodySmall,
     color: colors.textTertiary,
-    fontSize: 11,
     textAlign: 'center',
   },
 });

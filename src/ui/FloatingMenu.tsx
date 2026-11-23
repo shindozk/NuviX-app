@@ -1,10 +1,4 @@
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -303,7 +297,6 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
     isOpen: () => openRef.current,
   }));
 
-  /** Toggle used by both the drag handler and assistive technologies. */
   const toggleMenu = () => {
     if (openRef.current) closeMenu();
     else openMenu();
@@ -348,8 +341,11 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
+      {/* Scrim — only when open */}
       {open ? (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: scrimOpacity }]}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { opacity: scrimOpacity, zIndex: 99 }]}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={closeMenu}
@@ -359,6 +355,7 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
         </Animated.View>
       ) : null}
 
+      {/* Card menu — only when open, above the scrim but below the button */}
       {open ? (
         <Animated.View
           style={[
@@ -370,6 +367,7 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
               width: layout.cardW,
               opacity: progress,
               transform: [{ translateX: cardTranslate }, { scale: cardScale }],
+              zIndex: 100,
             },
           ]}
           onLayout={(event) => {
@@ -417,7 +415,7 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
         </Animated.View>
       ) : null}
 
-      {/* Draggable dock button */}
+      {/* Draggable dock button — zIndex 110 so it sits above everything */}
       <Animated.View
         style={[
           styles.button,
@@ -429,6 +427,7 @@ const FloatingMenu = forwardRef<FloatingMenuHandle, Props>(function FloatingMenu
               { translateY: position.y },
               { scale },
             ],
+            zIndex: 110,
           },
         ]}
         {...panResponder.panHandlers}

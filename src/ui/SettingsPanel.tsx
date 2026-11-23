@@ -19,6 +19,8 @@ import {
   faVolumeHigh,
   faXmark,
   faGamepad,
+  faHeart,
+  faCode,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
@@ -217,7 +219,28 @@ export default function SettingsPanel({
           </Section>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>NuviX v1.0</Text>
+            <View style={styles.profileCard}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>SK</Text>
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>shindozk</Text>
+                <Text style={styles.profileRole}>Desenvolvedor</Text>
+              </View>
+              <View style={styles.profileBadges}>
+                <View style={styles.badge}>
+                  <FaIcon icon={faCode} size={10} color={colors.primary} />
+                  <Text style={styles.badgeText}>Dev</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>NuviX v1.0</Text>
+              <View style={styles.footerDot} />
+              <Text style={styles.footerText}>Feito com</Text>
+              <FaIcon icon={faHeart} size={10} color={colors.danger} />
+              <Text style={styles.footerText}>por shindozk</Text>
+            </View>
           </View>
         </ScrollView>
       </View>
@@ -513,12 +536,84 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.outline,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  footerDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.outline,
+    marginHorizontal: 4,
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: alpha(colors.primary, 0.08),
+    borderWidth: 1,
+    borderColor: alpha(colors.primary, 0.2),
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.onPrimary,
+    letterSpacing: -0.5,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  profileName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.onSurface,
+  },
+  profileRole: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  profileBadges: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: alpha(colors.primary, 0.12),
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3,
   },
 });

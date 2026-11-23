@@ -1,39 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Modal,
+  Easing,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { faXmark } from '@fortawesome/free-solid-svg-icons';
 
-import { alpha, colors, duration, easing, shape, spacing, typeScale } from '../theme';
-import { IconButton } from './m3';
-import { playUiSound } from './sound';
+import { alpha, colors } from '../theme';
 
 type Props = {
   visible: boolean;
-  title?: string;
   onClose: () => void;
   children: React.ReactNode;
-  /** Fraction of the screen height the sheet covers when open. */
   heightRatio?: number;
 };
 
-/**
- * Material 3 modal bottom sheet: a rounded surface that slides up from the
- * bottom edge over a soft scrim, can be dismissed by dragging down or tapping
- * outside, and handles the safe area at the bottom.
- */
+const OPEN_EASING = Easing.bezier(0.2, 0, 0, 1);
+const CLOSE_EASING = Easing.bezier(0.3, 0, 0.8, 0.15);
+
 export default function BottomSheet({
   visible,
-  title,
   onClose,
   children,
   heightRatio = 0.82,
@@ -44,26 +34,24 @@ export default function BottomSheet({
   const sheetHeight = Math.round(screenHeight * heightRatio);
   const closedY = sheetHeight + insets.bottom;
 
-  const [rendered, setRendered] = useState(visible);
-
   const translateY = useRef(new Animated.Value(closedY)).current;
-  const backdrop = useRef(new Animated.Value(0)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      setRendered(true);
+      translateY.setValue(closedY);
+      backdropOpacity.setValue(0);
       Animated.parallel([
-        Animated.spring(translateY, {
+        Animated.timing(translateY, {
           toValue: 0,
-          damping: 22,
-          stiffness: 200,
-          mass: 0.9,
+          duration: 300,
+          easing: OPEN_EASING,
           useNativeDriver: true,
         }),
-        Animated.timing(backdrop, {
-          toValue: 1,
-          duration: duration.medium2,
-          easing: easing.standard,
+        Animated.timing(backdropOpacity, {
+          toValue: 0.4,
+          duration: 300,
+          easing: OPEN_EASING,
           useNativeDriver: true,
         }),
       ]).start();
@@ -71,164 +59,115 @@ export default function BottomSheet({
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: closedY,
-          duration: duration.medium1,
-          easing: easing.accelerate,
+          duration: 220,
+          easing: CLOSE_EASING,
           useNativeDriver: true,
         }),
-        Animated.timing(backdrop, {
+        Animated.timing(backdropOpacity, {
           toValue: 0,
-          duration: duration.short,
-          easing: easing.standard,
+          duration: 220,
+          easing: CLOSE_EASING,
           useNativeDriver: true,
         }),
-      ]).start(({ finished }) => {
-        if (finished) setRendered(false);
-      });
+      ]).start();
     }
-  }, [visible, closedY, translateY, backdrop]);
+  }, [visible, closedY, translateY, backdropOpacity]);
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 6,
+      onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 8,
       onPanResponderMove: (_event, gesture) => {
         translateY.setValue(Math.max(0, gesture.dy));
       },
       onPanResponderRelease: (_event, gesture) => {
-        const shouldClose = gesture.dy > 90 || gesture.vy > 0.5;
-        if (shouldClose) {
+        if (gesture.dy > 80 || gesture.vy > 0.5) {
           onClose();
-          return;
+        } else {
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: 200,
+            easing: OPEN_EASING,
+            useNativeDriver: true,
+          }).start();
         }
-        Animated.spring(translateY, {
-          toValue: 0,
-          damping: 22,
-          stiffness: 220,
-          mass: 0.9,
-          useNativeDriver: true,
-        }).start();
-      },
-      onPanResponderTerminate: () => {
-        translateY.setValue(0);
       },
     })
   ).current;
 
-  if (!rendered) return null;
+  if (!visible) return null;
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      hardwareAccelerated={Platform.OS === 'android'}
-      onRequestClose={onClose}
-    >
-      <View style={styles.root}>
-        <Animated.View
-          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdrop }]}
-        >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          />
-        </Animated.View>
+    <>
+      {/* Scrim */}
+      <Animated.View
+        style={[styles.backdrop, { opacity: backdropOpacity }]}
+        pointerEvents="auto"
+      >
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar"
+        />
+      </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              height: sheetHeight,
-              paddingBottom: Math.max(insets.bottom, spacing.lg),
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <View style={styles.sheetTint} pointerEvents="none" />
+      {/* Sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            height: sheetHeight,
+            paddingBottom: Math.max(insets.bottom, 12),
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <View style={styles.handleWrap} {...pan.panHandlers}>
+          <View style={styles.handle} />
+        </View>
 
-          <View style={styles.handle} {...pan.panHandlers} />
-
-          <View style={styles.header}>
-            {title ? (
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-            ) : (
-              <View style={{ flex: 1 }} />
-            )}
-            <IconButton
-              icon={faXmark}
-              onPress={() => {
-                playUiSound('tap', 0.3);
-                onClose();
-              }}
-              variant="standard"
-              accessibilityLabel="Close"
-            />
-          </View>
-
-          <View style={styles.content}>{children}</View>
-        </Animated.View>
-      </View>
-    </Modal>
+        <View style={styles.content}>{children}</View>
+      </Animated.View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
   backdrop: {
-    backgroundColor: colors.scrim,
-    opacity: 0,
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#00000066',
+    zIndex: 100,
   },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopLeftRadius: shape.xl,
-    borderTopRightRadius: shape.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: alpha(colors.onSurface, 0.08),
-    borderBottomWidth: 0,
+    zIndex: 101,
     backgroundColor: colors.surfaceContainer,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: alpha(colors.onSurface, 0.08),
     shadowColor: colors.shadow,
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 16,
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 24,
   },
-  sheetTint: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: alpha(colors.surfaceContainerLow, 0.45),
+  handleWrap: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   handle: {
-    alignSelf: 'center',
-    width: 36,
+    width: 38,
     height: 4,
-    borderRadius: shape.full,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    backgroundColor: alpha(colors.onSurface, 0.24),
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
-  },
-  title: {
-    ...typeScale.titleLarge,
-    color: colors.onSurface,
-    flex: 1,
+    borderRadius: 999,
+    backgroundColor: alpha(colors.onSurface, 0.28),
   },
   content: {
     flex: 1,

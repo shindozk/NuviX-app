@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+  Switch,
+  TextInput,
+} from 'react-native';
 import {
   faDatabase,
   faGlobe,
@@ -9,16 +17,17 @@ import {
   faSliders,
   faUser,
   faVolumeHigh,
+  faXmark,
+  faGamepad,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
-import { alpha, colors, spacing, typeScale } from '../theme';
+import { alpha, colors } from '../theme';
 import { ZOOM_OPTIONS, type Settings, type UserAgentMode } from '../settings';
 import { strings } from '../i18n';
-import { Button, ChipRow, Divider, ListRow, M3Switch, SectionHeader, Segmented, TextField } from './m3';
+import FaIcon from './Icon';
 import BottomSheet from './BottomSheet';
 import { playUiSound } from './sound';
-import Icon from './Icon';
 
 type Props = {
   visible: boolean;
@@ -36,8 +45,6 @@ const UA_OPTIONS: { mode: UserAgentMode; label: string }[] = [
   { mode: 'custom', label: strings.uaCustom },
 ];
 
-const ZOOM_SEGMENTS = ZOOM_OPTIONS.map((option) => ({ value: option, label: `${option}%` }));
-
 export default function SettingsPanel({
   visible,
   settings,
@@ -53,249 +60,465 @@ export default function SettingsPanel({
     onChange(patch);
   };
 
+  if (!visible) return null;
+
   return (
-    <BottomSheet visible={visible} title={strings.settingsTitle} onClose={onClose}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Section icon={faGlobe} title={strings.userAgent}>
-          <Text style={styles.hint}>{strings.userAgentHint}</Text>
-          <ChipRow<UserAgentMode>
-            options={UA_OPTIONS.map((option) => ({
-              value: option.mode,
-              label: option.label,
-            }))}
-            value={settings.userAgentMode}
-            onChange={(value) => change({ userAgentMode: value })}
-            accessibilityLabel={strings.userAgent}
-          />
-          {settings.userAgentMode === 'custom' ? (
-            <TextField
-              label={strings.customUa}
-              value={settings.customUserAgent}
-              onChangeText={(value) => onChange({ customUserAgent: value })}
-              placeholder={strings.customUaPlaceholder}
-              multiline
-            />
-          ) : null}
-        </Section>
-
-        <Section icon={faMagnifyingGlass} title={strings.zoom}>
-          <Segmented<number>
-            options={ZOOM_SEGMENTS}
-            value={settings.zoom}
-            onChange={(value) => change({ zoom: value })}
-            accessibilityLabel={strings.zoom}
-          />
-        </Section>
-
-        <Section icon={faSliders} title={strings.behavior}>
-          <View style={styles.card}>
-            <ToggleRow
-              label={strings.keepAwake}
-              value={settings.keepAwake}
-              onValueChange={(value) => change({ keepAwake: value })}
-            />
-            <Divider style={styles.divider} />
-            <ToggleRow
-              label={strings.touchControlsToggle}
-              value={settings.touchControls}
-              onValueChange={(value) => change({ touchControls: value })}
-            />
-            <Divider style={styles.divider} />
-            <ToggleRow
-              label={strings.uiSounds}
-              icon={faVolumeHigh}
-              value={settings.uiSounds}
-              onValueChange={(value) => change({ uiSounds: value })}
-            />
-          </View>
-        </Section>
-
-        <Section icon={faMicrochip} title={strings.performance}>
-          <View style={styles.card}>
-            <ToggleRow
-              label={strings.showStats}
-              value={settings.showPerformanceStats}
-              onValueChange={(value) => change({ showPerformanceStats: value })}
-            />
-            <Divider style={styles.divider} />
-            <ToggleRow
-              label={strings.enableHaptics}
-              value={settings.enableHaptics}
-              onValueChange={(value) => change({ enableHaptics: value })}
-            />
-          </View>
-        </Section>
-
-        <Section icon={faUser} title={strings.account}>
-          <View style={styles.card}>
-            <Text style={styles.body}>{strings.signInHint}</Text>
-            <View style={styles.actions}>
-              <Button
-                label={strings.accountAction}
-                icon={faUser}
-                onPress={() => {
-                  playUiSound('tap', 0.4);
-                  onLogin();
-                }}
-              />
-            </View>
-          </View>
-        </Section>
-
-        <Section icon={faDatabase} title={strings.data}>
-          {confirmingReset ? (
-            <View style={[styles.card, styles.confirmCard]}>
-              <Text style={styles.body}>{strings.resetConfirm}</Text>
-              <View style={styles.confirmActions}>
-                <Button
-                  label={strings.cancel}
-                  variant="outlined"
-                  onPress={() => setConfirmingReset(false)}
-                />
-                <Button
-                  label={strings.confirm}
-                  tone="danger"
-                  onPress={() => {
-                    setConfirmingReset(false);
-                    playUiSound('tap', 0.4);
-                    onReset();
-                  }}
-                />
-              </View>
-            </View>
-          ) : (
-            <View style={styles.card}>
-              <ListRow
-                icon={faRotateRight}
-                label={strings.resetSettings}
-                tone="danger"
-                onPress={() => setConfirmingReset(true)}
-              />
-            </View>
-          )}
-        </Section>
-
-        <View style={styles.footerBox}>
-          <Text style={styles.footer}>
-            {strings.appName} · {strings.version} 1.0.0
-          </Text>
-          <Text style={styles.footerMuted}>{strings.notOfficial}</Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{strings.settingsTitle}</Text>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
+            <FaIcon icon={faXmark} size={16} color={colors.onSurface} />
+          </Pressable>
         </View>
-      </ScrollView>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ===== SEÇÃO: GERAIS ===== */}
+          <Section icon={faSliders} title="Geral">
+            <ToggleRow
+              icon={faVolumeHigh}
+              label="Sons da interface"
+              value={settings.uiSounds}
+              onValueChange={(v) => change({ uiSounds: v })}
+            />
+            <Divider />
+            <ToggleRow
+              icon={faMicrochip}
+              label="Manter tela ligada"
+              value={settings.keepAwake}
+              onValueChange={(v) => change({ keepAwake: v })}
+            />
+            <Divider />
+            <ToggleRow
+              icon={faGamepad}
+              label="Controles na tela"
+              value={settings.touchControls}
+              onValueChange={(v) => change({ touchControls: v })}
+            />
+            <Divider />
+            <ToggleRow
+              icon={faMagnifyingGlass}
+              label="Estatísticas de desempenho"
+              value={settings.showPerformanceStats}
+              onValueChange={(v) => change({ showPerformanceStats: v })}
+            />
+            <Divider />
+            <ToggleRow
+              icon={faMicrochip}
+              label="Habilitar vibração"
+              value={settings.enableHaptics}
+              onValueChange={(v) => change({ enableHaptics: v })}
+            />
+          </Section>
+
+          {/* ===== SEÇÃO: VÍDEO ===== */}
+          <Section icon={faMicrochip} title="Vídeo">
+            <SegmentedRow
+              label="Zoom"
+              options={ZOOM_OPTIONS.map((z) => ({ value: String(z), label: `${z}%` }))}
+              selected={settings.zoom.toString()}
+              onSelect={(v) => change({ zoom: Number(v) })}
+            />
+          </Section>
+
+          {/* ===== SEÇÃO: NAVEGAÇÃO ===== */}
+          <Section icon={faGlobe} title="Navegação">
+            <SegmentedRow
+              label="User Agent"
+              options={UA_OPTIONS.map((o) => ({ value: o.mode, label: o.label }))}
+              selected={settings.userAgentMode}
+              onSelect={(v) => change({ userAgentMode: v as UserAgentMode })}
+            />
+            {settings.userAgentMode === 'custom' && (
+              <TextInput
+                style={styles.textInput}
+                value={settings.customUserAgent}
+                onChangeText={(v) => change({ customUserAgent: v })}
+                placeholder="Digite o User Agent..."
+                placeholderTextColor={colors.outline}
+              />
+            )}
+          </Section>
+
+          {/* ===== SEÇÃO: IDIOMA ===== */}
+          <Section icon={faGlobe} title="Idioma">
+            <SegmentedRow
+              label="Idioma"
+              options={[
+                { value: 'auto', label: 'Auto' },
+                { value: 'pt', label: 'Português' },
+                { value: 'en', label: 'English' },
+              ]}
+              selected={settings.language}
+              onSelect={(v) => change({ language: v as any })}
+            />
+          </Section>
+
+          {/* ===== SEÇÃO: CONTA ===== */}
+          <Section icon={faUser} title="Conta">
+            <ActionRow
+              icon={faUser}
+              label="Login / Conta"
+              onPress={onLogin}
+            />
+          </Section>
+
+          {/* ===== SEÇÃO: DADOS ===== */}
+          <Section icon={faDatabase} title="Dados">
+            <ActionRow
+              icon={faRotateRight}
+              label={strings.resetSettings}
+              danger
+              onPress={() => {
+                if (!confirmingReset) {
+                  setConfirmingReset(true);
+                  return;
+                }
+                onReset();
+                setConfirmingReset(false);
+              }}
+            />
+            {confirmingReset && (
+              <View style={styles.confirmCard}>
+                <Text style={styles.confirmText}>
+                  Tem certeza? Isso apagará todas as configurações.
+                </Text>
+                <View style={styles.confirmRow}>
+                  <Pressable
+                    style={[styles.btn, styles.btnCancel]}
+                    onPress={() => setConfirmingReset(false)}
+                  >
+                    <Text style={styles.btnCancelText}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.btn, styles.btnConfirm]}
+                    onPress={() => {
+                      onReset();
+                      setConfirmingReset(false);
+                    }}
+                  >
+                    <Text style={styles.btnConfirmText}>Confirmar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </Section>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>NuviX v1.0</Text>
+          </View>
+        </ScrollView>
+      </View>
     </BottomSheet>
   );
 }
 
-type SectionProps = {
+// ===================== COMPONENTES AUXILIARES =====================
+
+function Section({
+  icon,
+  title,
+  children,
+}: {
   icon: IconProp;
   title: string;
   children: React.ReactNode;
-};
-
-function Section({ icon, title, children }: SectionProps) {
+}) {
   return (
     <View style={styles.section}>
-      <SectionHeader icon={icon} title={title} />
+      <View style={styles.sectionHeader}>
+        <FaIcon icon={icon} size={14} color={colors.primary} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );
 }
 
-type ToggleRowProps = {
+function ToggleRow({
+  icon,
+  label,
+  value,
+  onValueChange,
+}: {
+  icon: IconProp;
   label: string;
-  icon?: IconProp;
   value: boolean;
-  onValueChange: (value: boolean) => void;
-};
-
-function ToggleRow({ label, icon, value, onValueChange }: ToggleRowProps) {
+  onValueChange: (v: boolean) => void;
+}) {
   return (
-    <ListRow
-      icon={icon}
-      label={label}
+    <Pressable
+      style={styles.row}
       onPress={() => onValueChange(!value)}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-      trailing={
-        <View pointerEvents="none" style={styles.switchWrap}>
-          <M3Switch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
-        </View>
-      }
-    />
+    >
+      <FaIcon icon={icon} size={16} color={colors.onSurfaceVariant} />
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{
+          false: alpha(colors.onSurface, 0.15),
+          true: alpha(colors.primary, 0.5),
+        }}
+        thumbColor={value ? colors.primary : alpha(colors.onSurface, 0.5)}
+      />
+    </Pressable>
   );
 }
 
+function SegmentedRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <View style={styles.segmentedRow}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.segmentedControl}>
+        {options.map((opt) => (
+          <Pressable
+            key={opt.value}
+            style={[
+              styles.segment,
+              selected === opt.value && styles.segmentActive,
+            ]}
+            onPress={() => onSelect(opt.value)}
+          >
+            <Text
+              style={[
+                styles.segmentLabel,
+                selected === opt.value && styles.segmentLabelActive,
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ActionRow({
+  icon,
+  label,
+  danger,
+  onPress,
+}: {
+  icon: IconProp;
+  label: string;
+  danger?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={styles.row}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <FaIcon
+        icon={icon}
+        size={16}
+        color={danger ? colors.danger : colors.onSurfaceVariant}
+      />
+      <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function Divider() {
+  return <View style={styles.divider} />;
+}
+
+// ===================== ESTILOS =====================
+
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.sm,
-    gap: spacing.xxl,
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: alpha(colors.onSurface, 0.12),
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 16,
   },
   section: {
-    gap: spacing.md,
+    gap: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 4,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   sectionBody: {
-    gap: spacing.xs,
-  },
-  card: {
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: 20,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: alpha(colors.onSurface, 0.05),
+    borderColor: alpha(colors.onSurface, 0.06),
     overflow: 'hidden',
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  rowLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.onSurface,
+    fontWeight: '500',
+  },
+  rowLabelDanger: {
+    color: colors.danger,
+  },
   divider: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.xxs,
+    height: 1,
+    backgroundColor: alpha(colors.onSurface, 0.08),
+    marginHorizontal: 16,
   },
-  switchWrap: {
-    marginLeft: spacing.xs,
+  segmentedRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
   },
-  hint: {
-    ...typeScale.bodyMedium,
+  segmentedControl: {
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: alpha(colors.onSurface, 0.06),
+    borderRadius: 10,
+    padding: 2,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentActive: {
+    backgroundColor: alpha(colors.primary, 0.2),
+  },
+  segmentLabel: {
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.onSurfaceVariant,
   },
-  body: {
-    ...typeScale.bodyMedium,
-    color: colors.onSurfaceVariant,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+  segmentLabelActive: {
+    color: colors.primary,
   },
-  actions: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+  textInput: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: alpha(colors.onSurface, 0.06),
+    borderWidth: 1,
+    borderColor: alpha(colors.onSurface, 0.12),
+    color: colors.onSurface,
+    fontSize: 13,
   },
   confirmCard: {
-    gap: spacing.md,
-    padding: spacing.md,
-    paddingTop: 0,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: alpha(colors.danger, 0.08),
+    borderWidth: 1,
+    borderColor: alpha(colors.danger, 0.2),
+    gap: 10,
   },
-  confirmActions: {
+  confirmText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    lineHeight: 18,
+  },
+  confirmRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    paddingLeft: spacing.md,
+    gap: 8,
   },
-  footerBox: {
+  btn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
-    gap: spacing.xxs,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+  },
+  btnCancel: {
+    backgroundColor: alpha(colors.onSurface, 0.1),
+  },
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.onSurface,
+  },
+  btnConfirm: {
+    backgroundColor: colors.danger,
+  },
+  btnConfirmText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   footer: {
-    ...typeScale.labelMedium,
-    color: colors.textSecondary,
-    letterSpacing: 0.4,
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  footerMuted: {
-    ...typeScale.bodySmall,
-    color: colors.textTertiary,
-    textAlign: 'center',
+  footerText: {
+    fontSize: 12,
+    color: colors.outline,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 });

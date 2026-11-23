@@ -13,11 +13,11 @@ import {
   faChevronLeft,
   faChevronRight,
   faChevronUp,
+  faCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 
 import { alpha, colors } from '../theme';
-import FaIcon from './Icon';
 import { playUiSound } from './sound';
 
 // Standard W3C gamepad button indices
@@ -52,13 +52,11 @@ function FaceButton({
   index,
   size,
   run,
-  primary,
 }: {
   label: string;
   index: number;
   size: number;
   run: Run;
-  primary?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const { pressIn, pressOut } = usePressFeedback(run, index);
@@ -71,18 +69,12 @@ function FaceButton({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: primary
-            ? alpha(colors.primary, 0.22)
-            : alpha(colors.onSurface, 0.1),
-          borderColor: primary
-            ? alpha(colors.primary, 0.65)
-            : alpha(colors.onSurface, 0.24),
         },
       ]}
-      hitSlop={4}
+      hitSlop={6}
       onPressIn={() => {
         Animated.spring(scale, {
-          toValue: 0.88,
+          toValue: 0.9,
           useNativeDriver: true,
         }).start();
         pressIn();
@@ -104,8 +96,7 @@ function FaceButton({
         style={[
           styles.faceLabel,
           {
-            fontSize: Math.round(size * 0.38),
-            color: primary ? colors.primary : colors.onSurface,
+            fontSize: Math.round(size * 0.42),
             transform: [{ scale }],
           },
         ]}
@@ -142,15 +133,9 @@ function PadKey({
         {
           width: size,
           height: size,
-          backgroundColor: pressed
-            ? alpha(colors.primary, 0.28)
-            : alpha(colors.onSurface, 0.08),
-          borderColor: pressed
-            ? alpha(colors.primary, 0.7)
-            : alpha(colors.onSurface, 0.2),
         },
       ]}
-      hitSlop={3}
+      hitSlop={4}
       onPressIn={() => {
         setPressed(true);
         pressIn();
@@ -163,7 +148,29 @@ function PadKey({
       accessibilityLabel={label}
       accessibilityRole="button"
     >
-      <FaIcon icon={icon} size={Math.round(size * 0.36)} color={colors.onSurface} />
+      <Animated.View
+        style={[
+          styles.padInner,
+          {
+            width: size * 0.62,
+            height: size * 0.62,
+            borderRadius: size * 0.32,
+          },
+          pressed && { opacity: 0.6, transform: [{ scale: 0.9 }] },
+        ]}
+      >
+        <View
+          style={[
+            styles.triangle,
+            {
+              borderLeftWidth: size * 0.16,
+              borderRightWidth: size * 0.16,
+              borderBottomWidth: size * 0.26,
+              transform: [{ rotate: icon === faChevronUp ? '0deg' : icon === faChevronDown ? '180deg' : icon === faChevronLeft ? '-90deg' : '90deg' }],
+            },
+          ]}
+        />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -174,12 +181,12 @@ function PadKey({
 function ShoulderButton({
   label,
   index,
-  width,
+  size,
   run,
 }: {
   label: string;
   index: number;
-  width: number;
+  size: number;
   run: Run;
 }) {
   const { pressIn, pressOut } = usePressFeedback(run, index);
@@ -190,17 +197,15 @@ function ShoulderButton({
       style={[
         styles.shoulder,
         {
-          width,
-          height: 32,
-          backgroundColor: pressed
-            ? alpha(colors.primary, 0.24)
-            : alpha(colors.onSurface, 0.09),
-          borderColor: pressed
-            ? alpha(colors.primary, 0.6)
-            : alpha(colors.onSurface, 0.2),
+          width: size,
+          height: size * 0.52,
+          borderTopLeftRadius: size * 0.26,
+          borderTopRightRadius: size * 0.26,
+          borderBottomLeftRadius: size * 0.1,
+          borderBottomRightRadius: size * 0.1,
         },
       ]}
-      hitSlop={4}
+      hitSlop={5}
       onPressIn={() => {
         setPressed(true);
         pressIn();
@@ -217,9 +222,8 @@ function ShoulderButton({
         style={[
           styles.shoulderLabel,
           {
-            fontSize: 12,
+            fontSize: Math.round(size * 0.22),
             color: pressed ? colors.primary : colors.onSurface,
-            letterSpacing: 0.5,
           },
         ]}
       >
@@ -235,12 +239,12 @@ function ShoulderButton({
 function AnalogStick({
   side,
   index,
-  baseSize,
+  size,
   run,
 }: {
   side: 'left' | 'right';
   index: number;
-  baseSize: number;
+  size: number;
   run: Run;
 }) {
   const pan = useRef(
@@ -253,8 +257,10 @@ function AnalogStick({
         run(`window.__xcpPad.setButton(${index}, true, 1)`);
       },
       onPanResponderMove: (_event, gesture) => {
-        const max = baseSize / 2 - 18;
-        run(`window.__xcpPad.setAxis(${side === 'left' ? 0 : 2}, ${gesture.dx}, ${gesture.dy})`);
+        const max = size / 2 - size * 0.22;
+        const dx = Math.max(-max, Math.min(max, gesture.dx));
+        const dy = Math.max(-max, Math.min(max, gesture.dy));
+        run(`window.__xcpPad.setAxis(${side === 'left' ? 0 : 2}, ${dx}, ${dy})`);
       },
       onPanResponderRelease: () => {
         run(`window.__xcpPad.setAxis(${side === 'left' ? 0 : 2}, 0, 0)`);
@@ -268,27 +274,22 @@ function AnalogStick({
       style={[
         styles.stickBase,
         {
-          width: baseSize,
-          height: baseSize,
-          borderRadius: baseSize / 2,
-          backgroundColor: alpha(colors.onSurface, 0.055),
-          borderColor: alpha(colors.onSurface, 0.16),
+          width: size,
+          height: size,
+          borderRadius: size / 2,
         },
       ]}
       {...pan.panHandlers}
       accessible
       accessibilityLabel={`${side} analog stick`}
     >
-      <View style={styles.stickRing} />
       <View
         style={[
           styles.stickKnob,
           {
-            width: baseSize * 0.36,
-            height: baseSize * 0.36,
-            borderRadius: (baseSize * 0.36) / 2,
-            backgroundColor: alpha(colors.onSurface, 0.26),
-            borderColor: alpha(colors.onSurface, 0.36),
+            width: size * 0.44,
+            height: size * 0.44,
+            borderRadius: size * 0.22,
           },
         ]}
       />
@@ -303,12 +304,13 @@ export default function TouchControls({ run }: { run: Run }) {
   const { width, height } = useWindowDimensions();
   const U = Math.min(width, height) * 0.062;
 
-  const faceSize = Math.round(U * 1.05);
-  const stickBaseSize = Math.round(U * 2.4);
-  const padKeySize = Math.round(U * 0.92);
-  const shoulderWidth = Math.round(U * 2.6);
+  const faceSize = Math.round(U * 1.0);
+  const stickBaseSize = Math.round(U * 2.2);
+  const padKeySize = Math.round(U * 0.95);
+  const shoulderWidth = Math.round(U * 2.4);
+  const gap = Math.round(U * 0.12);
 
-  // Safe insets (approx, avoid system nav bar)
+  // Safe insets
   const safeTop = Math.max(12, height * 0.025);
   const safeBottom = Math.max(12, height * 0.04);
 
@@ -317,28 +319,32 @@ export default function TouchControls({ run }: { run: Run }) {
     top: height * yf,
   });
 
+  const stickBottom = safeBottom + stickBaseSize * 0.15;
+  const padBottom = safeBottom + padKeySize * 0.4;
+  const faceBottom = safeBottom + faceSize * 1.3;
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* Shoulder / trigger buttons */}
+      {/* Shoulder / trigger buttons — topo da tela */}
       <View style={[styles.shoulderGroup, { top: safeTop, left: atSafe(0.02, 0).left }]}>
-        <ShoulderButton label="LT" index={B.LT} width={shoulderWidth} run={run} />
+        <ShoulderButton label="LT" index={B.LT} size={shoulderWidth} run={run} />
       </View>
       <View style={[styles.shoulderGroup, { top: safeTop, right: width * 0.02 }]}>
-        <ShoulderButton label="RT" index={B.RT} width={shoulderWidth} run={run} />
+        <ShoulderButton label="RT" index={B.RT} size={shoulderWidth} run={run} />
       </View>
-      <View style={[styles.shoulderGroup, { top: safeTop + 36, left: atSafe(0.02, 0).left }]}>
-        <ShoulderButton label="LB" index={B.LB} width={shoulderWidth} run={run} />
+      <View style={[styles.shoulderGroup, { top: safeTop + shoulderWidth * 0.62, left: atSafe(0.02, 0).left }]}>
+        <ShoulderButton label="LB" index={B.LB} size={shoulderWidth} run={run} />
       </View>
-      <View style={[styles.shoulderGroup, { top: safeTop + 36, right: width * 0.02 }]}>
-        <ShoulderButton label="RB" index={B.RB} width={shoulderWidth} run={run} />
+      <View style={[styles.shoulderGroup, { top: safeTop + shoulderWidth * 0.62, right: width * 0.02 }]}>
+        <ShoulderButton label="RB" index={B.RB} size={shoulderWidth} run={run} />
       </View>
 
-      {/* D-pad */}
+      {/* D-pad — canto inferior esquerdo */}
       <View
         style={[
           styles.padGrid,
           {
-            bottom: safeBottom + stickBaseSize * 0.4,
+            bottom: padBottom,
             left: atSafe(0.03, 0).left,
             width: padKeySize * 3,
             height: padKeySize * 3,
@@ -354,10 +360,10 @@ export default function TouchControls({ run }: { run: Run }) {
         <View
           style={[
             styles.padCenter,
-            { width: padKeySize * 0.65, height: padKeySize * 0.65, borderRadius: padKeySize * 0.33 },
+            { width: padKeySize * 0.6, height: padKeySize * 0.6, borderRadius: padKeySize * 0.3 },
           ]}
         >
-          <View style={[styles.padDot, { width: 6, height: 6, borderRadius: 3 }]} />
+          <View style={[styles.padDot, { width: padKeySize * 0.14, height: padKeySize * 0.14, borderRadius: padKeySize * 0.07 }]} />
         </View>
         <View style={[styles.padCell, { width: padKeySize, height: padKeySize }]}>
           <PadKey icon={faChevronRight} label="D-pad right" index={B.RIGHT} size={padKeySize} run={run} />
@@ -367,58 +373,60 @@ export default function TouchControls({ run }: { run: Run }) {
         </View>
       </View>
 
-      {/* Analog sticks */}
+      {/* Analog sticks — base inferior esquerda / direita */}
       <View
         style={[
           styles.stickGroup,
           {
-            bottom: safeBottom + stickBaseSize * 0.35,
-            left: atSafe(0.08, 0).left,
+            bottom: stickBottom,
+            left: atSafe(0.12, 0).left,
           },
         ]}
       >
-        <AnalogStick side="left" index={B.L3} baseSize={stickBaseSize} run={run} />
+        <AnalogStick side="left" index={B.L3} size={stickBaseSize} run={run} />
       </View>
       <View
         style={[
           styles.stickGroup,
           {
-            bottom: safeBottom + stickBaseSize * 0.35,
-            right: width * 0.08,
+            bottom: stickBottom,
+            right: width * 0.12,
           },
         ]}
       >
-        <AnalogStick side="right" index={B.R3} baseSize={stickBaseSize} run={run} />
+        <AnalogStick side="right" index={B.R3} size={stickBaseSize} run={run} />
       </View>
 
-      {/* Face buttons */}
+      {/* Face buttons — losango inferior direito */}
       <View
         style={[
           styles.faceGroup,
           {
-            bottom: safeBottom + faceSize * 1.4,
-            right: width * 0.04,
+            bottom: faceBottom,
+            right: width * 0.06,
+            width: faceSize * 3 + gap * 2,
+            height: faceSize * 3 + gap * 2,
           },
         ]}
       >
-        <View style={[styles.faceRow, { gap: faceSize * 0.16 }]}>
+        <View style={[styles.faceRow, { gap }]}>
           <FaceButton label="Y" index={B.Y} size={faceSize} run={run} />
         </View>
-        <View style={[styles.faceRow, { gap: faceSize * 0.16 }]}>
+        <View style={[styles.faceRow, { gap }]}>
           <FaceButton label="X" index={B.X} size={faceSize} run={run} />
           <FaceButton label="B" index={B.B} size={faceSize} run={run} />
         </View>
-        <View style={[styles.faceRow, { gap: faceSize * 0.16 }]}>
-          <FaceButton label="A" index={B.A} size={faceSize} run={run} primary />
+        <View style={[styles.faceRow, { gap }]}>
+          <FaceButton label="A" index={B.A} size={faceSize} run={run} />
         </View>
       </View>
 
-      {/* L3 / R3 small buttons */}
-      <View style={[styles.faceSmall, { bottom: safeBottom + stickBaseSize * 0.35 + stickBaseSize + 8, left: atSafe(0.08, 0).left }]}>
-        <FaceButton label="L3" index={B.L3} size={Math.round(faceSize * 0.55)} run={run} />
+      {/* L3 / R3 small buttons — acima dos sticks */}
+      <View style={[styles.faceSmall, { bottom: stickBottom + stickBaseSize + 8, left: atSafe(0.12, 0).left + stickBaseSize * 0.28 }]}>
+        <FaceButton label="L3" index={B.L3} size={Math.round(faceSize * 0.5)} run={run} />
       </View>
-      <View style={[styles.faceSmall, { bottom: safeBottom + stickBaseSize * 0.35 + stickBaseSize + 8, right: width * 0.08 }]}>
-        <FaceButton label="R3" index={B.R3} size={Math.round(faceSize * 0.55)} run={run} />
+      <View style={[styles.faceSmall, { bottom: stickBottom + stickBaseSize + 8, right: width * 0.12 + stickBaseSize * 0.28 }]}>
+        <FaceButton label="R3" index={B.R3} size={Math.round(faceSize * 0.5)} run={run} />
       </View>
     </View>
   );
@@ -431,15 +439,18 @@ const styles = StyleSheet.create({
   },
   shoulderGroup: {
     position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   faceGroup: {
     position: 'absolute',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   faceRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginVertical: 2,
+    alignItems: 'center',
   },
   faceSmall: {
     position: 'absolute',
@@ -461,45 +472,65 @@ const styles = StyleSheet.create({
   padCenter: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: alpha(colors.onSurface, 0.06),
+    borderWidth: 1,
+    borderColor: alpha(colors.onSurface, 0.12),
   },
   padDot: {
-    backgroundColor: alpha(colors.onSurface, 0.25),
+    backgroundColor: alpha(colors.onSurface, 0.2),
   },
   padKey: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+  },
+  padInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: alpha(colors.onSurface, 0.09),
     borderWidth: 1.5,
+    borderColor: alpha(colors.onSurface, 0.22),
+  },
+  triangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: alpha(colors.onSurface, 0.85),
   },
   face: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    backgroundColor: alpha(colors.onSurface, 0.1),
+    borderWidth: 2,
+    borderColor: alpha(colors.onSurface, 0.28),
   },
   faceLabel: {
     fontWeight: '700',
+    color: colors.onSurface,
   },
   shoulder: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    backgroundColor: alpha(colors.onSurface, 0.1),
     borderWidth: 1.5,
+    borderColor: alpha(colors.onSurface, 0.24),
   },
   shoulderLabel: {
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   stickBase: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-  },
-  stickRing: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: alpha(colors.onSurface, 0.08),
+    backgroundColor: alpha(colors.onSurface, 0.06),
+    borderWidth: 2.5,
+    borderColor: alpha(colors.onSurface, 0.2),
   },
   stickKnob: {
-    borderWidth: 1,
+    backgroundColor: alpha(colors.onSurface, 0.24),
+    borderWidth: 1.5,
+    borderColor: alpha(colors.onSurface, 0.36),
   },
 });

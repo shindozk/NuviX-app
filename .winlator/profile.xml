@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Winlator default input profile — keyboard + mouse layout -->
+<profile>
+    <!-- Keyboard mappings -->
+    <keyboard>
+        <key code="KEY_W" label="Forward" />
+        <key code="KEY_A" label="Left" />
+        <key code="KEY_S" label="Backward" />
+        <key code="KEY_D" label="Right" />
+        <key code="KEY_SPACE" label="Jump" />
+        <key code="KEY_SHIFT" label="Sprint" />
+        <key code="KEY_CTRL" label="Crouch" />
+        <key code="KEY_ESC" label="Menu" />
+        <key code="KEY_TAB" label="Inventory" />
+        <key code="KEY_E" label="Interact" />
+        <key code="KEY_F" label="Use" />
+        <key code="KEY_R" label="Reload" />
+        <key code="KEY_1" label="Slot 1" />
+        <key code="KEY_2" label="Slot 2" />
+        <key code="KEY_3" label="Slot 3" />
+        <key code="KEY_4" label="Slot 4" />
+        <key code="KEY_5" label="Slot 5" />
+    </keyboard>
+
+    <!-- Mouse mappings -->
+    <mouse>
+        <button code="MOUSE_LEFT" label="Fire / Primary" />
+        <button code="MOUSE_RIGHT" label="Aim / Secondary" />
+        <button code="MOUSE_MIDDLE" label="Reload" />
+        <wheel code="MOUSE_WHEEL_UP" label="Next Weapon" />
+        <wheel code="MOUSE_WHEEL_DOWN" label="Prev Weapon" />
+    </mouse>
+</profile>
